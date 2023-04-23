@@ -12,6 +12,12 @@ not stop just because "somebody else already did something similar" :)
 
   - Initial version, 2023-04-23
 
+## References used
+
+  - https://en.wikipedia.org/wiki/NABU_Network
+  - https://bitsavers.org/pdf/nabu/Nabu_Computer_Technical_Manual_by_MJP.pdf
+
+Other than those, the only information used was the original chips datasheets; Z-80, TR1863/1865, TMS9918A, AY-3-8910, 9637, 9639 and LS74-logic.
 
 ## Introduction
 
