@@ -1,6 +1,13 @@
 # nabunet - Modem and Network Specifications
 My idea of a network backend for the "Nabu PC" - based on reverse engineering the old device and boot code...
 
+The big question first: **why?** or **why not join any of the other similar projects?** simple: fun! For
+me, most of the fun is the reverse engineering and coming-up-with-solutions phase. So joining some
+other project here wouldn't do it for me... it is as simple as that. I hope that my view/take provides
+something at least remotely unique and if public interest is low... I'll keep it to myself, but I'll
+not stop just because "somebody else already did something similar" :)
+
+
 ## Revisions
 
   - Initial version, 2023-04-23
