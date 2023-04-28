@@ -10,3 +10,4 @@ modem and pass excution to that. While the IO devices are all connected with the
 interrupt system, the boot loader uses polling to wait for a required condition 
 instead. *opinion: I think this is to avoid any non-linear code paths in the ROM code.*
 
+![Flow chart of high level operation](BootProcess.png?raw=true "Flowchart")
