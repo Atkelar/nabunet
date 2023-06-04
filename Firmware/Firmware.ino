@@ -28,7 +28,7 @@
 // #define SERIALDIAG
 
 
-/*
+/*mk
  * 
  * What needs to happen - high level operations definition:
  * 
@@ -63,6 +63,7 @@
 
 // We need to avoid clashing with the SD File class later...
 #define FS_NO_GLOBALS
+// ...which would happen if we just include FS.h
 #include <FS.h>
 
 
@@ -94,7 +95,7 @@
 
 
 // Reset button, pulled high, active LOW.
-#define PIN_RESET 16
+#define PIN_SIGNAL 16
 
 
 // we write a constant size config blob...
@@ -110,6 +111,8 @@
 // Fallback server URL for broken configs
 #define DEFAULT_SERVER_URL "https://nabu.atkelar.com"
 
+// version number of firmware, for reporting... Maxmimum 16 chars!
+#define NABUNET_MODEM_FIRMWARE_VERSION "1.0.0 beta"
 
 // Maximum size for a configuration image. SHould be slightly less than 32k, to open optino to replace
 // built in EEPROM with an external 32k one eventually...
@@ -177,6 +180,13 @@
 #define HCCA_STATE_RUN 13
 #define HCCA_STATE_SEND_BLOCK_GO 14
 
+// NabuNet state machine values:
+#define NN_STATE_UNKNOWN 0
+#define NN_STATE_CONNECTING 1
+#define NN_STATE_CONNECTED 2
+#define NN_STATE_ERROR 3
+
+
 // (Error) signals are "blink codes" for the error LED
 #define ERROR_SIGNAL_LOCALSERVERFAILD 2  // SD card based server was requested but didn't work out. Missing or bad files, broken card...
 #define ERROR_SIGNAL_WIFIFAILED 3   // WiFi was configured, but has failed to connect to the remote server.
@@ -193,6 +203,7 @@
 
 // diagnostic macros...
 #ifdef SERIALDIAG
+// #define diag(...) Serial.print(#__VA_ARGS__);
 #define diag(x) Serial.print(x);
 #define diaghex(x) Serial.print(" 0x"); Serial.print(x, HEX);
 #define DISABLE_HCCA
@@ -258,8 +269,11 @@ byte HCCAReceiveBuffer[HCCA_BUFFER_SIZE];
 int HCCARxStart, HCCARxEnd, HCCATxStart, HCCATxEnd;
 int HCCASendBlockSize;
 
-// State machine.
+// State machine for low level NABU HCCA...
 int HCCAState;
+
+// State machine for higher level NabuNet com...
+int NabuNetState;
 
 // State change indicator helpers...
 // specifically, the "reset" modem command sequence: 0x83, 0x83, 0x83, 0x83, 0x81, etc... with at least 500ms delay in between is important...
@@ -269,6 +283,19 @@ int HCCAResetSequenceCount;
 
 int PanicCode;
 
+// NabuNet specific modem status...
+unsigned long nn_started;
+bool nn_incoming;
+int nn_checksum;
+byte nn_code;
+bool nn_isReply;
+bool nn_hasPayload;
+bool nn_rxDone;
+int nn_payloadLength;
+int nn_payloadOffset;
+int nn_connectToken;
+bool nn_connectInitiated;
+byte nn_rx_payload[128];
 
 
 // shared IO buffer for various functions; should be no problem as each of them is only ever active alone...
@@ -541,18 +568,18 @@ void load_or_init_config()
         strncpy(NetworkHost, info->NetworkHost, 255);
         strncpy(NetworkUserName, info->NetworkUserName, 39);
         memcpy(NetworkUserToken, info->NetworkUserToken, 16);
-        strncpy(info->ConfigImageVersion, ConfigImageVersion, 31);
+        strncpy(ConfigImageVersion, info->ConfigImageVersion, 31);
        
         configValid = true;
         break;
     }
     
 #ifdef SERIALDIAG
-    Serial.print("EEPROM valid, version:\t");
-    Serial.print(info->Version);
-    Serial.print("\t valid: ");
-    Serial.print(configValid ? "yes" : "no");
-    Serial.print("\n");
+    diag("EEPROM valid, version:\t");
+    diag(info->Version);
+    diag("\t valid: ");
+    diag(configValid ? "yes" : "no");
+    diag("\n");
 #endif    
   }
 
@@ -631,6 +658,9 @@ void reset_hcca_state()
   LastHCCAInput = millis();     // some state changes might be timing related, so remember when the last input happened.
   HCCAResetSequenceCount = 0;
   HCCARxStart = HCCARxEnd = HCCATxStart = HCCATxEnd = 0;
+
+  NabuNetState = NN_STATE_UNKNOWN;
+  nn_incoming = false;
 }
 
 void clear_hcca_receive()
@@ -667,10 +697,9 @@ bool hcca_send(byte what)
 
 bool hcca_flush()
 {
-  
   while (HCCATxStart != HCCATxEnd)
   {
-    delay(2);  // tune...
+    delay(1);  // tune...
   #ifndef DISABLE_HCCA
     Serial.write(HCCASendBuffer[HCCATxStart]);
   #else
@@ -699,10 +728,284 @@ int hcca_received_length()
   return (HCCA_BUFFER_SIZE + HCCARxEnd) - HCCARxStart;
 }
 
+// diagnostics helper: bliks the number in the byte with IO/NET LEDs, i.e. 0x5F will blink IO 5 times, NET 15 times.
 void blink_byte(byte n)
 {
     blink_status_confirmed(PIN_LED_IO, (n >> 4) & 0xF);
     blink_status_confirmed(PIN_LED_NET, n & 0xF);
+}
+
+bool NabuNetSend(byte code, bool isReply, byte* bufferAddress, int bufferLength)
+{
+  if (code > 0xf)
+    return false;
+  if (isReply)
+    code |= 0x40;
+  if (bufferAddress != NULL && bufferLength != 0)
+  {
+    if (bufferLength < 0 || bufferLength > 128)
+      return false;
+    code |= 0x80;
+  }
+  int checksum = code;
+  if (!hcca_send(code))
+    return false;
+  if (bufferLength > 0 && bufferAddress != NULL)
+  {
+    code = bufferLength;
+    checksum+=code;
+    if (!hcca_send(code))
+      return false;
+    for (int i = 0; i < bufferLength; i++)
+    {
+      if (!hcca_send(bufferAddress[i]))
+        return false;
+      checksum+=bufferAddress[i];
+    }
+  }
+  
+  if (!hcca_send(0xFF - (checksum & 0xFF)))
+    return false;
+    
+  return true;
+}
+
+void ResetNabuNetNow()
+{
+  nn_incoming = false;
+  nn_started = 0;
+  NabuNetState = NN_STATE_UNKNOWN;
+}
+
+void SetNabuNetError()
+{
+  nn_incoming = false;
+  nn_started = 0;
+  NabuNetState = NN_STATE_ERROR;
+  digitalWrite(PIN_LED_ERR, LED_ON);
+  digitalWrite(PIN_LED_IO, LED_OFF);
+}
+
+char nn_reportedConfigProgramVersion[33];
+
+bool HandleModemConfigCommand(bool isReply, byte* payload, int payloadLength)
+{
+  if (payloadLength > 0 && !isReply)
+  {
+    switch(payload[0])
+    {
+      case 0x00:  // query modem config.
+        // payload should have an ASCII string with "payloadlength-1" characters for the modem version string.
+        // this should be the same as the one in the active boot image for validation. 
+        // If successful, we reply with our MAC address and own version number...
+        if (payloadLength > 1 && payloadLength <=33)
+        {
+          memset(nn_reportedConfigProgramVersion, 0, 33);
+          memcpy(nn_reportedConfigProgramVersion, payload+1, payloadLength-1);  
+
+          if(strcmp(nn_reportedConfigProgramVersion, ConfigImageVersion)!= 0)
+          {
+            SetNabuNetError();
+            buffer[0] = 0;
+            return NabuNetSend(0xF, true, buffer, 1);
+          }
+
+          // and now, send our own info...
+          WiFi.macAddress(buffer + 100);
+          buffer[0] = 0;
+          sprintf((char*)buffer+1, "%02X%02X%02X%02X%02X%02X", buffer[100], buffer[101], buffer[102], buffer[103], buffer[104], buffer[105]);
+          strcpy((char*)buffer+13, NABUNET_MODEM_FIRMWARE_VERSION);
+          
+          return NabuNetSend(0xF, true, buffer, strlen(((const char*)buffer)+1)+1);
+        }
+        buffer[0] = 0;
+        return NabuNetSend(0xF, true, buffer, 1);
+    }
+  }
+  return true;
+}
+
+// we got regular Nabu Net communication happening.
+// currently, this is called pretty deeply nested;
+// might be worth "unwinding" that into some less deep stack...
+bool handle_nabunet_communication()
+{
+  int readByte = hcca_receive();
+  if (readByte >= 0)
+  {
+    //blink_byte(readByte);
+    if (nn_incoming)  // we are receiving a package!  
+    {
+      nn_checksum += readByte;
+      if (nn_hasPayload)
+      {
+        if (nn_payloadLength < 0)  // we just got the payload length...
+        {
+          nn_payloadLength = readByte;
+          nn_payloadOffset = 0;
+        }
+        else
+        {
+          if (nn_payloadOffset >= nn_payloadLength)
+          {
+            // we got the checksum now...
+            nn_rxDone = true;
+          }
+          else
+          {
+            nn_rx_payload[nn_payloadOffset] = readByte;
+            nn_payloadOffset++;
+          }
+        }
+      }
+      else
+      {
+        // no payload, this has to be the checksum already...
+        nn_rxDone = true;
+      }
+    }
+    else
+    {
+      digitalWrite(PIN_LED_IO, LED_ON); 
+      nn_started = millis();
+      nn_incoming = true;
+      nn_payloadLength = -1;
+      nn_checksum = readByte;
+      nn_rxDone = false;
+      // independently of status, the byte should be a header...
+      // parse it as such...
+      nn_code = (readByte & 0xF);
+      nn_isReply = (readByte & 0x40) != 0;
+      nn_hasPayload = (readByte & 0x80) != 0;
+    }
+    // read the rest of the packet with a timeout...
+    if (nn_rxDone)
+    {
+      digitalWrite(PIN_LED_IO, LED_OFF);
+      nn_rxDone = false;
+      nn_incoming = false;
+      nn_started = 0;
+      if ((nn_checksum & 0xFF) != 0xFF)
+      {
+        SetNabuNetError();
+        blink_byte(0x22);
+      }
+      else
+      {
+        switch(NabuNetState)
+        {
+          case NN_STATE_CONNECTED:
+            // this took way too long... but: now we have received a proper sync'd protocol message!
+            switch (nn_code)
+            {
+              case 0:
+                // uh-oh... resync request; drop all and run!
+                if (nn_hasPayload && !nn_isReply && nn_payloadLength==1)
+                {
+                  NabuNetState = NN_STATE_CONNECTING;
+                  nn_connectInitiated = false;
+                  nn_connectToken = nn_rx_payload[0];
+                  NabuNetSend(0x00, true, nn_rx_payload, 1);
+                } // ignore any others...
+                break;
+              case 1:
+                // User data io operations... TODO
+                break;
+              case 2:
+                // User stream/io operations... TODO
+                break;
+              case 0xE:
+                break;
+              case 0xF:
+                if (IsServicingMode)
+                {
+                  return HandleModemConfigCommand(nn_isReply, nn_rx_payload, nn_hasPayload ? nn_payloadLength : 0);
+                }// non-servicing mode drops through to "unknown protocol code" by design!
+              default:
+                SetNabuNetError();
+                break;
+            }
+            break;
+          case NN_STATE_CONNECTING:
+            // we ignore anything, except a proper SYNC packet...
+            if (nn_hasPayload && nn_code == 0 && nn_payloadLength == 1)
+            {
+              // if the received packet is a valid reply to our request, we lock on.
+              if (nn_isReply && nn_rx_payload[0] == nn_connectToken)
+              {
+                // CHECK! if we originated the request, send 3rd message.
+                if (nn_connectInitiated)
+                {
+                  NabuNetSend(0x00, true, nn_rx_payload, 1);
+                }
+                NabuNetState = NN_STATE_CONNECTED;
+                digitalWrite(PIN_LED_ERR, LED_OFF);
+              }
+              else
+              {
+                SetNabuNetError();
+                blink_byte(nn_rx_payload[0]);
+                // we got a reply, but it's not ours...
+                NabuNetState = NN_STATE_UNKNOWN;
+              }
+            }
+            break;
+          case NN_STATE_UNKNOWN:
+          case NN_STATE_ERROR:
+            // we ignore anything, except a proper formed SYNC request...
+            if (nn_hasPayload && !nn_isReply && nn_code == 0 && nn_payloadLength == 1)
+            {
+              NabuNetState = NN_STATE_CONNECTING;
+              nn_connectToken = nn_rx_payload[0];
+              nn_connectInitiated = false;
+              NabuNetSend(0x00, true, nn_rx_payload, 1);  // send reply...
+            }
+/*            else
+              if (nn_started == 0)  // track timeout for our own reconnect...
+                nn_started = millis();*/
+            break;
+          default:
+            SetNabuNetError();
+            break;
+        }
+      }
+    }
+  }
+  else
+  {
+    if (nn_incoming)  // we are receiving a package! count timeout!
+    {
+      unsigned long delta = millis() - nn_started;
+      if (delta > 500)  // half a second for "complete message" is MORE than enough...
+      {
+        SetNabuNetError();
+      }
+    }
+    else
+    {
+      if (NabuNetState == NN_STATE_UNKNOWN || NabuNetState == NN_STATE_ERROR)
+      {
+        if (nn_started == 0)
+          nn_started = millis();
+        else
+        {
+          unsigned long delta = millis() - nn_started;
+          if (delta > 2500)
+          {
+            nn_connectInitiated = true;
+            nn_connectToken = (nn_connectToken +1) & 0xFF;
+            if (nn_connectToken == 0)
+              nn_connectToken = 1;
+            nn_rx_payload[0]=nn_connectToken;
+            NabuNetSend(0x00, false, nn_rx_payload, 1);
+            NabuNetState = NN_STATE_CONNECTING;
+            nn_started = 0;
+          }
+        }
+      }
+    }
+  }
+  return true;
 }
 
 // react to incoming bytes from NABU, based on current HCCA state...
@@ -948,20 +1251,17 @@ bool handle_hcca_buffer()
         if (!hcca_flush())
           return false;
         HCCAState = HCCAIsLastBlock ? HCCA_STATE_RUN : HCCA_STATE_WAIT_FOR_BLOCK_REQUEST;
-
       }
       break;
     case HCCA_STATE_RUN:
+      // We got the Nabu PC with a proper control program now, anything should happen within this section now.
       // TODO: handle actual requests... might need reworking when we have info about the old NABU protocol...
-      readByte = hcca_receive();
-      if (readByte >= 0)
-      {
-        blink_byte(readByte);
-      }
-      break;
+      if (handle_nabunet_communication())
+        return hcca_flush();
   }
   return true;
 }
+
 /*
 void test_blocksend_code()
 {
@@ -1000,6 +1300,7 @@ bool handle_hcca_incoming()
           diag("RESET!");
           // Gotcha!
           HCCAState = HCCA_STATE_BOOT;
+          ResetNabuNetNow();
           return true;
         }
       }
@@ -1012,7 +1313,6 @@ bool handle_hcca_incoming()
 
     if (!push_hcca_received(byteInput))
       return false;
-
   }
   return handle_hcca_buffer();
 }
@@ -1036,7 +1336,7 @@ bool confirm_install_setup_image()
 {
 
   int count = 0;
-  while (count < (5000 / BLINK_DELAY) && digitalRead(PIN_RESET) == HIGH)
+  while (count < (5000 / BLINK_DELAY) && digitalRead(PIN_SIGNAL) == HIGH)
   {
     digitalWrite(PIN_LED_NET, ((count % 2)==0) ? LED_ON : LED_OFF);
     digitalWrite(PIN_LED_ERR, ((count % 2)==0) ? LED_ON : LED_OFF);
@@ -1044,7 +1344,7 @@ bool confirm_install_setup_image()
     count++;
   }
 
-  while (digitalRead(PIN_RESET) == HIGH)
+  while (digitalRead(PIN_SIGNAL) == HIGH)
     delay(1); // wait for release again...
 
   digitalWrite(PIN_LED_NET, LED_OFF);
@@ -1058,11 +1358,11 @@ bool wait_signal_released()
 {
   // waits for the reset button to be released, signalling "OK" all the way...
 
-  if(digitalRead(PIN_RESET) == LOW)
+  if(digitalRead(PIN_SIGNAL) == LOW)
   {
     // yes, we might...
     int count = 0;
-    while (count < (5000 / BLINK_DELAY) && digitalRead(PIN_RESET) == LOW)
+    while (count < (5000 / BLINK_DELAY) && digitalRead(PIN_SIGNAL) == LOW)
     {
       digitalWrite(PIN_LED_NET, ((count % 2)==0) ? LED_ON : LED_OFF);
       digitalWrite(PIN_LED_ERR, ((count % 2)!=0) ? LED_ON : LED_OFF);
@@ -1186,16 +1486,10 @@ void replace_setup_image_from_card()
         int r = f.read(buffer, 32);
         diag("\n read bytes: ");
         diag(r);
-        if (r > 0)
+        if (r <= 0) // bail out if we can't read the version string...
         {
-          diag("Loaded image: ");
-          strncpy(ConfigImageVersion, (const char*)buffer, 32);
-          diag(ConfigImageVersion);
-          
-          ConfigFlags |= CONFIG_FLAG_HAS_IMAGE;
-        }
-        else
           imageLoaded = false;
+        }
       }
       else
         imageLoaded = false;
@@ -1247,7 +1541,7 @@ void setup()
   // initial serial for diag com output.
   Serial.begin(115200, SERIAL_8N1);
 
-  Serial.print("\n\nDIAG_START\n");
+  diag("\n\nDIAG_START\n");
 #else
 
   // initialize serial for Nabu com.
@@ -1259,14 +1553,16 @@ void setup()
   pinMode(PIN_LED_IO, OUTPUT);
   pinMode(PIN_FIVEV_ENABLE, OUTPUT);
   
-  pinMode(PIN_RESET, INPUT);
+  pinMode(PIN_SIGNAL, INPUT);
 
   digitalWrite(PIN_LED_ERR, LED_OFF);
   digitalWrite(PIN_LED_NET, LED_OFF);
   digitalWrite(PIN_LED_IO, LED_OFF);
 
   // enable the 5V side of the modem via the level shifter.
+#ifndef SERIALDIAG
   digitalWrite(PIN_FIVEV_ENABLE, HIGH); 
+#endif
 
   SPIFFS.begin();
 
@@ -1300,8 +1596,12 @@ void setup()
   IsServicingMode = false;
 
   PanicCode = 0;
+
+  NabuNetState = NN_STATE_UNKNOWN;
   
   ModemState = STATE_BOOT; // delegate some more heavy lifting into the loop method, just because.
+
+  nn_reportedConfigProgramVersion[0]=0;
 }
 
 void loop() 

@@ -50,4 +50,12 @@ key_available:
     cp b
     ret
 
+; returns the state of the special keys in "bc"
+get_special_keys:
+    ld bc, (KEY_STATES)
+    ret
 
+; returns the state of the joysticks in "bc" - c => joystick 1, b => joystick 2
+get_joystick_state:
+    ld bc, (JOY_STATUS_1)   ; status 2 is following 1, so load 16-bit
+    ret

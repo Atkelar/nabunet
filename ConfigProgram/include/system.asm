@@ -50,3 +50,21 @@ set_led:
     out (IO_CONTROL), a
     ld (STATUS_BYTE), a
     ret
+
+
+; waits for a certain number of frames, i.e. 1/60s second.
+; a => number of frames to count...
+delay_frames:
+    or a
+    ret z
+
+    ld b, a
+    ld a, (VDP_TIMER)
+    ld c, a
+.delay_frame_loop:  ; wait for next frame from interrupt...
+    ld a, (VDP_TIMER)
+    cp c
+    jr z, .delay_frame_loop
+    ld a, b
+    dec a
+    jr delay_frames

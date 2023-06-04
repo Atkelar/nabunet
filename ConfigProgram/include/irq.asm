@@ -51,6 +51,7 @@ enable_interrupt_mask:
     push af
     ld a,  (IRQ_ENABLED_FLAGS)
     or c
+    ld c, a
     jr .set_interrupt_mask_internal
     ret
 
@@ -62,6 +63,7 @@ disable_interrupt_mask:
     ld c, a
     ld a,  (IRQ_ENABLED_FLAGS)
     and c
+    ld c, a
     jr .set_interrupt_mask_internal
     ret
 
@@ -125,13 +127,13 @@ disable_interrupt_mask:
     and 01Fh    ; filter out any non-button code part.
     ld de, 0
     ld b, a
-    ld hl, JOY_NEXT_NUMBER
-    ld a, (hl)
+    ld a, (JOY_NEXT_NUMBER)
+    ld e, a
     ld hl, JOY_STATUS_1
     add hl, de
     ld (hl), b
     ld a, b
-    jr .regular_key
+    jp .kbd_handled
 
 .special_key_handler:
     ; now we have codes E0-FF - which is down or up of special keys...
@@ -159,10 +161,6 @@ disable_interrupt_mask:
     sub 0F0h    ; one based for loop!
     ; lookup flag...
     ld e, a
-
-    ld a, CONTROL_LED_CHECK
-    ld b, 2
-    call set_led
 
     ld a, e
     ld b, 0
@@ -332,8 +330,99 @@ set_slot_irq_enabled:
     ; blink cursor... on/off matches bit 0x20 -> should be 32 frames; at 60fps that should 
     ; be just about 0.5s and a good blink rate with almost no effort.
 
-    ; RX timeout countdown?
+    ld a, (CURSOR_FLAGS)
+    and CURSOR_FLAG_VISIBLE
+    jr z, .cursor_done
 
+    ld a, (VDP_TIMER)
+    and 020h    
+    jr z, .cursor_should_be_normal
+    ld a, (CURSOR_FLAGS)
+    and CURSOR_FLAG_BLINKON
+    jr nz, .cursor_done
+
+    push hl
+    push de
+    ; flip cursor character to "0"
+    ld hl,(CURSOR_OFFSET)  ; save for later use too.
+    ; 2.: read current character from screen and remember.
+    ld de, VDP_SCREEN_BASE
+    add hl, de
+    ld a, l
+    out (IO_VDP_CONTROL), a
+    ld a, h
+    and 3Fh     ; mask top bits
+    or 040h     ; update address select bit
+    out (IO_VDP_CONTROL), a
+    xor a
+    out (IO_VDP_DATA), a
+    pop de
+    pop hl
+
+    ld a, (CURSOR_FLAGS)
+    or CURSOR_FLAG_BLINKON
+    ld (CURSOR_FLAGS),a
+    jr .cursor_done
+
+.cursor_should_be_normal:
+    ld a, (CURSOR_FLAGS)
+    and CURSOR_FLAG_BLINKON
+    jr z, .cursor_done
+
+    push hl
+    push de
+    ; flip cursor character to "0"
+    ld hl,(CURSOR_OFFSET)  ; save for later use too.
+    ; 2.: read current character from screen and remember.
+    ld de, VDP_SCREEN_BASE
+    add hl, de
+    ld a, l
+    out (IO_VDP_CONTROL), a
+    ld a, h
+    and 3Fh     ; mask top bits
+    or 040h     ; update address select bit
+    out (IO_VDP_CONTROL), a
+    ld a, (CURSOR_ORIGINAL_CHAR)
+    out (IO_VDP_DATA), a
+    pop de
+    pop hl
+
+    ld a, (CURSOR_FLAGS)
+    and ~CURSOR_FLAG_BLINKON & 0ffh
+    ld (CURSOR_FLAGS),a
+    jr .cursor_done
+
+.cursor_done:
+    ; RX timeout countdown?
+    ld a, (VDP_TIMER)
+    ld b, a
+    inc a
+    xor b
+    and 040h ; did bit flip with inc?
+    jr z, .rx_timeout_done
+
+    ld a, (HCCA_RX_STATUS)
+    cp HCCA_XFSTATUS_RUNNING
+    jr nz, .rx_timeout_done  ; we are idle/error
+  
+    ld a,(HCCA_RX_TIMEOUT) 
+    or a
+    jr z, .rx_timeout_expired
+    dec a
+    ld (HCCA_RX_TIMEOUT), a
+    jr .rx_timeout_done
+.rx_timeout_expired:
+    ld a, HCCA_XFSTATUS_ERROR
+    ld (HCCA_RX_STATUS), a
+    ld a, HCCA_ERROR_TIMEOUT
+    ld (HCCA_RX_ERROR), a
+    ld a, HCCA_STATUS_ERROR
+    ld (HCCA_STATUS), a
+
+;    ld c, IRQ_MASK_HCCA_RX      ; stop waiting for input... TODO: validate for callbacks?
+;    call disable_interrupt_mask
+
+.rx_timeout_done:
     ; 1016h 3-byte counter...
     ld a, (VDP_TIMER)
     inc a
@@ -375,20 +464,19 @@ set_slot_irq_enabled:
 
     ld a, (HCCA_TX_STATUS)
 
-    cp 1
+    cp HCCA_XFSTATUS_RUNNING
     jr nz, .send_done_or_error
 
-
-    ld bc, (HCCA_TX_TOGO)
-    ld a, b
-    or c
+    ld a, (HCCA_TX_TOGO)
+    or a
     jr z, .send_done_now
 
-    dec bc
-    ld (HCCA_TX_TOGO),bc
+    dec a
+
+    ld (HCCA_TX_TOGO),a
     ld bc, (HCCA_TX_CURRENT)
     ld a, (bc)
-    out (0x80), a
+    out (IO_HCCA), a
     inc bc
     ld (HCCA_TX_CURRENT),bc
 
@@ -398,29 +486,216 @@ set_slot_irq_enabled:
     reti
 
 .send_done_now:
-    ld a, 0
+    ld a, HCCA_XFSTATUS_IDLE
     ld (HCCA_TX_STATUS), a
 
 .send_done_or_error:
-    ld c, 040h
+    ld c, IRQ_MASK_HCCA_TX
     call disable_interrupt_mask
     pop bc
     pop af
     ei
     reti
 
+; the HCCA received signal will decode the protocol details and do checksum handling
 .hcca_recevied_interrupt:
     push af
     push bc
+    push de
+    push hl
 
+  	ld a,00fh
+	out (IO_SOUND_LATCH),a
+	in a,(IO_SOUND_DATA)
+    and STATUS_HCCA_OVERRUN | STATUS_HCCA_FRAMING
+    jr z, .hcca_receive_modem_ready
+    ; TODO: error condition in receive!
 
+    ld (HCCA_RX_ERROR), a
+    ld a, HCCA_XFSTATUS_ERROR
+    ld (HCCA_RX_STATUS), a
+    jp .hcca_receive_done   ; abort in HW error case.
 
+.hcca_receive_modem_ready:  
+    ; make room for next byte ASAP - the RX speed is slow compared to CPU speed,
+    ; so as long as we are picking up the byte quickly, we shouldn't end up in overflow state...
+    in a, (IO_HCCA)
+    ld b, a
+    ld a, (HCCA_STATUS) ; check overall status first...
+    cp HCCA_STATUS_CONNECTED
+    jr z, .hcca_receive_normal
+    cp HCCA_STATUS_CONNECTING
+    jr z, .hcca_receive_normal
+    jp .hcca_receive_unknown_state
+
+.hcca_receive_normal:
+    ; normal byte incoming...
+    ld a, (HCCA_RX_LL_STATE)
+    cp HCCA_LLSTATE_IDLE
+    jp z, .new_packet_start
+    cp HCCA_LLSTATE_EXPECTLEN
+    jp z, .packet_len_received
+    cp HCCA_LLSTATE_DATA
+    jr z, .packet_data_received
+    ; if we got here, we are dealing with the checksum byte...
+    ld a, (HCCA_RX_LL_CHECKSUM)
+    add b
+    xor HCCA_PROT_CHECKSUM_TARGET
+    jr z, .checksum_ok
+    ld a, HCCA_LLSTATE_IDLE
+    ld (HCCA_RX_LL_STATE), a
+    ; uh-oh... checksum didn't validate! need to re-sync eventually!
+    ld a, HCCA_ERROR_CHECKSUM
+    ld (HCCA_RX_ERROR), a
+    ld a, HCCA_STATUS_ERROR
+    ld (HCCA_STATUS), a
+    ld a, HCCA_XFSTATUS_ERROR
+    ld (HCCA_RX_STATUS), a
+    ld (HCCA_TX_STATUS), a
+    jp .hcca_receive_done
+
+.packet_data_received:
+    ld a,(HCCA_RX_LL_CHECKSUM)
+    add b
+    ld (HCCA_RX_LL_CHECKSUM), a
+    ld hl, (HCCA_RX_CURRENT)
+    ld a, b
+    ld (hl), a
+    inc hl
+    ld (HCCA_RX_CURRENT),hl
+    ld a, (HCCA_RX_TOGO)
+    dec a
+    ld (HCCA_RX_TOGO), a
+    or a
+    jp z, .packet_data_done
+    jp .hcca_receive_done
+.packet_data_done:
+    ld a, HCCA_LLSTATE_CHECKSUM
+    ld (HCCA_RX_LL_STATE), a
+    jp .hcca_receive_done
+
+.checksum_ok:
+    ; if we are in "handshaking" mode, we need to see if we are waiting for a response or not.
+    ; we expect either:
+    ;   * "STREAM" package input, copy to listener buffer if any...
+    ;   * "reply" to previously sent package of any type; copy data - if any - to target buffer and signal if matching code.
+    ; The higher level receive code is responsible for anything else.
+    ; any other packet configuratoin is a protocol error at this stage.
+    ld a, HCCA_LLSTATE_IDLE
+    ld (HCCA_RX_LL_STATE), a
+    ld a, (HCCA_RX_LL_CODE)
+    and a, HCCA_PROT_FLAG_REPLY
+    jr nz, .packet_was_reply
+    ld a, (HCCA_RX_LL_CODE)
+    and a, HCCA_PROT_MASK_CODE
+    cp HCCA_PROT_CODE_STREAM
+    jr z, .packet_was_streaminput
+    jr .error_in_protocol
+
+.packet_was_reply:
+    ld a, (HCCA_RX_LL_CODE)
+    and HCCA_PROT_MASK_CODE
+    ld b,a
+    ld a, (HCCA_RX_EXPECTED)
+    cp b
+    jr z, .packet_was_expected_reply
+    ld a, HCCA_LLSTATE_IDLE ; ignore...
+    jp .hcca_receive_done
+
+.packet_was_expected_reply:
+    ld a, (HCCA_RX_LL_LENGTH)
+    ld b,a
+    ld a, (HCCA_RX_SIZE)
+    cp b
+    jr c, .error_in_protocol
+
+    ld de, (HCCA_RX_TARGET)
+    ld hl, HCCA_RX_BUFFER
+    ld a, (HCCA_RX_LL_LENGTH)
+    ld (HCCA_RX_LENGTH),a
+    ld c, a
+    ld b, 0
+    ldir
+    ld a, HCCA_XFSTATUS_IDLE
+    ld (HCCA_RX_STATUS), a
+    jr .hcca_receive_done
+
+.packet_was_streaminput:
+
+    jr .hcca_receive_done
+
+.packet_len_received:
+    ld a,(HCCA_RX_LL_CHECKSUM)
+    add b
+    ld (HCCA_RX_LL_CHECKSUM), a
+    ld a,b
+    cp 081h    ; maximum 80h
+    jr nc, .error_in_protocol
+    ld (HCCA_RX_LL_LENGTH), a
+    ld (HCCA_RX_TOGO), a
+    ld a, HCCA_LLSTATE_DATA
+    ld (HCCA_RX_LL_STATE), a
+    ld hl, HCCA_RX_BUFFER
+    ld (HCCA_RX_CURRENT), hl
+
+    jr .hcca_receive_done
+
+.error_in_protocol:
+    ld a, HCCA_ERROR_PROTOCOL
+    ld (HCCA_RX_ERROR), a
+    ld a, HCCA_STATUS_ERROR
+    ld (HCCA_STATUS), a
+    ld a, HCCA_XFSTATUS_ERROR
+    ld (HCCA_RX_STATUS), a
+    ld (HCCA_TX_STATUS), a
+    jr .hcca_receive_done
+
+.new_packet_start:
+    ld a, b
+    ld (HCCA_RX_LL_CHECKSUM), a    ; start checksum
+    ld (HCCA_RX_LL_CODE), a        ; remember code for current packet
+    and HCCA_PROT_FLAG_DATA
+    jr z, .new_packet_nodata
+
+    ld a, HCCA_LLSTATE_EXPECTLEN
+    ld (HCCA_RX_LL_STATE), a
+    ld hl, HCCA_RX_BUFFER
+    ld (HCCA_RX_CURRENT), hl
+    jr .hcca_receive_done
+
+.new_packet_nodata:
+    ld a,HCCA_LLSTATE_CHECKSUM
+    ld (HCCA_RX_LL_STATE), a
+    xor a
+    ld (HCCA_RX_LL_LENGTH), a
+    jr .hcca_receive_done
+
+.hcca_receive_unknown_state:
+    ; As of now, handshake is dealt with at a procedure level; the handling of a "resync" request is done after the packet was received...
+;     ; the modem state is "error"; we expect - at most - a sync request at this time...
+;     ld a,b
+;     cp HCCA_PROT_FLAG_DATA | HCCA_PROT_CODE_HANDSHAKE
+;     jr nz, .hcca_receive_done
+; .hcca_receive_start_handshake:
+;     ; we recevied a handshake request in unknown state, start handshake process
+;     ld (HCCA_RX_LL_CHECKSUM), a    ; start checksum
+;     xor a
+;     ld (HCCA_HS_INIT), a
+;     ld (HCCA_HS_TOKEN), a
+;     ld (HCCA_RX_CODE), a
+;     ld hl, HCCA_RX_BUFFER
+;     ld (HCCA_RX_CURRENT), hl
+;     ld (HCCA_RX_TOGO), 8bitonly
+;     ld a, HCCA_STATUS_CONNECTING
+;     ld (HCCA_STATUS), a
+
+.hcca_receive_done:
+    pop hl
+    pop de
     pop bc
     pop af
     ei
     reti
-
-    
 
 ; IMPORTANT: the interrupt table MUST start at an 0x??00 offset!
 ; It is thus copied to a non-used suitable RAM location by the init code...

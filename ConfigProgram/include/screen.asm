@@ -23,9 +23,251 @@ setup_screen:
     ld a, 24
     ld (SCREEN_HEIGHT), a
 
+    xor a
+    ld (CURSOR_OFFSET), a
+    ld (CURSOR_POSITION_X), a
+    ld (CURSOR_POSITION_Y), a
+    ld (CURSOR_ORIGINAL_CHAR), a
+
     ld a, VDP_COLOR_WHITE << 4 | VDP_COLOR_DARK_BLUE
     call clear_screen
 
+    ld a, CURSOR_DEFAULT_STYLE
+    call set_cursor_style
+
+    ld a,1  ; 1 => visible
+    call set_cursor_visible
+
+    ret
+
+; Overall concepts:
+;  Screen modes GFX1, GFX2 and TEXT have "text mode" features. The "Multicolor" mode (MC) is not
+;  really designed for characters on screen, so we don't support it in any of the "text" based
+;  outputs.
+
+; "goto_xy" - put the cursor to location X/Y on the screen.
+
+; "print" - print 0-terminated string to current cursor location. Includes handling for \n and 
+;           similar control characters.
+
+; "clear_eol" - clears the remaining line - current cursor position to the end of the line,
+;               the cursor is NOT moved though.
+
+; "clear_screen" - clears the entire screen, positions the cursor to the top left corner (0/0)
+
+; "load_font" - loads a character set into screen memory. Can be a partial charset too.
+
+; "set_cursor_style" - configures the cursor style: line width.
+
+; "set_cursor_visible" - enables/disables the cursor on screen.
+
+; Cursor concept: The VDP doesn't support a hardware cursor. To compensate for that, we take the
+; character underneath the current cursor location, pick out the bitmap from the charset ROM,
+; invert the lines that make up the cursor, and save that as "charcter 0". To blink the cursor,
+; all that's needed is to flip the current character between 0 and whatever it was.
+; This requires that the cursor is carefully controlled: 
+;   * disable interrupts during enable/disable operations to prevent racing the flip code.
+;   * update cursor bitmap whenever the cursor location changes to a different character.
+; Internally, there's a "save/restore" cursor procedure available to properly disable and
+; re-enable the cursor and prevent run ins with the interrupt code, so that lengthy
+; operations (like print, or clear screen) don't have to disable the interrupts
+; and still can rely on a proper result.
+
+
+; a -> low nibble: line count -1, 0->7 for 1->8 lines
+;      high nibble: top skip lines: 0-7.
+set_cursor_style:
+    push af
+    call .disable_cursor_for_screen_proc
+    pop af
+
+    and 077h    ;  both values max out at 3-bits.
+
+    ld b, a
+    and 7
+    sla a
+    or b
+    ld (CURSOR_FLAGS), a
+    xor a
+    ld (CURSOR_ORIGINAL_CHAR), a    ; make sure we re-compute the current bitmap on next "enable"
+
+    
+    call .enable_cursor_for_screen_proc
+    ret
+
+set_cursor_visible:
+    ; check if  we need to toggle anything, shortcut if we don't.
+    or a
+    jr z, .set_cursor_invisible
+    ld a, (CURSOR_FLAGS)
+    and CURSOR_FLAG_VISIBLE
+    ret nz  ; already visible...
+    jr .cursor_enable_now   
+.set_cursor_invisible:
+    ld a, (CURSOR_FLAGS)
+    and CURSOR_FLAG_VISIBLE
+    ret z  ; already invisble...
+
+    ; when enabling the cursor, we need to check and possibly update the bitmap, when disabling, we can ignore that.
+    ; we disable the cursor: reset the current code. Importent: read/update needs to be guarded,
+    ; since an enabled cursor might be handled by the interrupt at any time.
+    di
+    ld a, (CURSOR_FLAGS)
+    and ~CURSOR_FLAG_VISIBLE
+    ld (CURSOR_FLAGS), a
+    ei
+
+    and CURSOR_FLAG_BLINKON ; check if we currently have the "inverted" char on screen...
+    ret z   ; no, all done.    
+    ; set target address...
+    ld hl, (CURSOR_OFFSET)
+    ld de, VDP_SCREEN_BASE
+    add hl, de
+    ld a, l
+    out (IO_VDP_CONTROL), a
+    ld a, h
+    and 3Fh     ; mask top bits
+    or 040h     ; set "address selection bit"
+    out (IO_VDP_CONTROL), a
+    ld a, (CURSOR_ORIGINAL_CHAR)
+    out (IO_VDP_DATA), a    ; write original character.
+    ret
+
+.cursor_enable_now:
+   ; 1.: compute cursor offset for simplification of flip code later.
+    ld a, (CURSOR_POSITION_Y)
+    ld b, a
+    ld a, (CURSOR_POSITION_X)
+    ld c, a
+    push bc
+    call .calculate_screen_offset
+    pop bc
+    ld (CURSOR_OFFSET), hl  ; save for later use too.
+    ; 2.: read current character from screen and remember.
+    ld de, VDP_SCREEN_BASE
+    add hl, de
+    ld a, l
+    out (IO_VDP_CONTROL), a
+    ld a, h
+    and 3Fh     ; mask top bits
+    out (IO_VDP_CONTROL), a
+    in a, (IO_VDP_DATA) ; read current code.
+    or a    ; did we accidentally end up at a zero char?
+    jr nz, .cursor_original_nonzero
+    ld a, 020h  ; we update "0" to space!
+.cursor_original_nonzero:
+    ld b, a
+    ld a, (CURSOR_ORIGINAL_CHAR)
+    ; 3.: if it is the same character that we already have (likely, probably space aynway)
+    cp b
+    jr z, .cursor_original_preset_ok    ; no change needed.
+
+    ; different char now...
+    ld a, b
+    ld (CURSOR_ORIGINAL_CHAR), a
+
+    ; 4.: now we need to read the bitmap info and save it back to the character set
+    ;     since the VDP address is shared between read/write, we need to buffer the 8 bytes...
+
+    ld d, 0     
+    ld e, a     ; char index...
+    sla e
+    rl d
+    sla e
+    rl d
+    sla e
+    rl d       ; offset * 8 for 8-bytes per char...
+    ld hl, VDP_CHARSET_BASE
+    add hl, de
+
+    ld a, l
+    out (IO_VDP_CONTROL), a
+    ld a, h
+    and 3Fh     ; mask top bits
+    out (IO_VDP_CONTROL), a
+
+    ld b, 8
+    ld c, IO_VDP_DATA
+    ld hl, CURSOR_BITMAP_BUFFER
+
+    inir    ; load the 8 bytes.
+
+    ; 5.: now, invert the bytes indexed between start/end line number...
+    ld hl, CURSOR_BITMAP_BUFFER
+    ld a, (CURSOR_FLAGS)
+    and CURSOR_FLAG_SKIP_MASK
+    ld c, 8
+.cursor_bitmap_skip_loop:
+    or a
+    jr z, .cursor_bitmap_skip_done
+    inc hl
+    dec c
+    sub CURSOR_FLAG_SKIP_INC
+    jr .cursor_bitmap_skip_loop
+.cursor_bitmap_skip_done:
+
+    ld a, (CURSOR_FLAGS)
+    and CURSOR_FLAG_HEIGHT_MASK
+.cursor_bitmap_invert_loop:
+    ld b, a
+
+    ld a, (hl)
+    cpl
+    ld (hl), a
+    inc hl
+
+    ld a, b
+    dec c
+    jr z, .cursor_bitmap_invert_done
+
+    or a
+    jr z,.cursor_bitmap_invert_done ;   check post loop, so that 0=1, 7=8...
+    sub a, CURSOR_FLAG_HEIGHT_INC
+    jr .cursor_bitmap_invert_loop
+
+.cursor_bitmap_invert_done:
+    ld hl, VDP_CHARSET_BASE
+    ld a, l
+    out (IO_VDP_CONTROL), a
+    ld a, h
+    and 3Fh     ; mask top bits
+    or 040h     ; set address selection bit
+    out (IO_VDP_CONTROL), a
+
+    ld b, 8
+    ld c, IO_VDP_DATA
+    ld hl, CURSOR_BITMAP_BUFFER
+
+    otir    ; load the 8 bytes to the charset memory.
+
+.cursor_original_preset_ok:
+
+    ld a, (CURSOR_FLAGS)
+    or CURSOR_FLAG_VISIBLE
+    and ~CURSOR_FLAG_BLINKON & 0xFF    ; the next interrupt should flip to the inverted character now. We don't do it here, 
+                                ; to avoid duplication.
+    ld (CURSOR_FLAGS), a        ; no DI/EI requried, THIS is the only critical storage access, atomic anyway.   
+
+    ret
+
+.disable_cursor_for_screen_proc:
+    ; disable the cursor IF it is currently enabled, memorizing the state in the screen buffer temp area.
+    ld a, (CURSOR_FLAGS)
+    and CURSOR_FLAG_VISIBLE
+    ld (CURSOR_BITMAP_BUFFER), a
+    or a
+    ret z       ; cursor already off.
+    xor a
+    call set_cursor_visible     ; turn off.
+    ret
+
+.enable_cursor_for_screen_proc:
+    ; enable the cursor IF it is was previously enabled, as stored in the screen buffer temp area.
+    ld a, (CURSOR_BITMAP_BUFFER)
+    or a
+    ret z   ; cursor was off...
+    ld a, 1
+    call set_cursor_visible     ; turn on
     ret
 
 
@@ -36,7 +278,7 @@ clear_eol:
     cp SCREEN_MODE_MCOL
     ret z   ; we don't "print" in MC mode...
 
-    ; TODO: temporary disable cursor...
+    call .disable_cursor_for_screen_proc
 
     ; initialize starting address in VDP...
     ld a, (CURSOR_POSITION_Y)
@@ -48,7 +290,7 @@ clear_eol:
     pop bc
 
     ; set target address...
-    ld de, 800h
+    ld de, VDP_SCREEN_BASE
     add hl, de
     ld a, l
     out (IO_VDP_CONTROL), a
@@ -72,26 +314,26 @@ clear_eol:
 
 .clear_eol_done:
 
-    ; TODO: enable cursor...
+    call .enable_cursor_for_screen_proc
     ret
 
 ; fills the current screen with "blanks" (character index 32) in text/gfx1/gfx2 modes, zero in MC mode.
 ;   foreground/background color in "a" will be used to setup color according to the screen mode.
 
 clear_screen:
-    push af
-    push de
-    push bc
-
     ld b, a
     ld a, (SCREEN_MODE)
-    cp SCREEN_MODE_TEXT
-    jr z, .textmode_clear
-  
+    cp SCREEN_MODE_MCOL
+    ret z
+
+    ld a, b
+    push af
+    call .disable_cursor_for_screen_proc
+    pop af
+
 
 .textmode_clear:
     ; write color code to register 7
-    ld a, b
     out (IO_VDP_CONTROL), a
     ld a, 87h
     out (IO_VDP_CONTROL), a
@@ -100,13 +342,10 @@ clear_screen:
 
 
 .common_clear:
-
-    ld a, 0
+    xor a
     ld (CURSOR_POSITION_X), a
     ld (CURSOR_POSITION_Y), a
     ld (CURSOR_ORIGINAL_CHAR), a    ; none yet.
-
-    ;call .prepare_cursor_bitmap
 
     ld a, 0
     out (IO_VDP_CONTROL), a
@@ -119,10 +358,9 @@ clear_screen:
     out (IO_VDP_DATA), a
     add hl, de
     jr nc, .clear_mem_loop
- 
-    pop bc
-    pop de
-    pop af
+
+    call .enable_cursor_for_screen_proc
+
     ret
 
 ; input: HL = address of string, 0-terminated.
@@ -133,7 +371,9 @@ print:
     cp SCREEN_MODE_MCOL
     ret z   ; we don't "print" in MC mode...
 
-    ; TODO: temporary disable cursor...
+    push hl
+    call .disable_cursor_for_screen_proc
+    pop hl
 
     ; initialize starting address in VDP...
 
@@ -147,7 +387,7 @@ print:
     call .calculate_screen_offset
     pop bc
 
-    ld de, 800h
+    ld de, VDP_SCREEN_BASE
     add hl, de
     ld a, l
     out (IO_VDP_CONTROL), a
@@ -200,7 +440,7 @@ print:
     push bc
     push de
     call .calculate_screen_offset
-    ld de, 800h
+    ld de, VDP_SCREEN_BASE
     add hl, de
     ld a, l
     out (IO_VDP_CONTROL), a
@@ -222,7 +462,7 @@ print:
     ld a, b
     ld (CURSOR_POSITION_Y), a
 
-    ; TODO: enable cursor...
+    call .enable_cursor_for_screen_proc
     ret
 
 ; input b = y, c = x
@@ -241,15 +481,17 @@ goto_xy:
     cp (hl)
     ret nc  ; height overflow
 
-    ; TODO: disable cursor...
-
+    push bc
     ; make sure we don't get blinking signals...
+    call .disable_cursor_for_screen_proc
+    pop bc
+
+    ld a, b
     ld (CURSOR_POSITION_Y), a
     ld a, c
     ld (CURSOR_POSITION_X), a
-    ;call .prepare_cursor_bitmap 
 
-    ; TODO: enable cursor...
+    call .enable_cursor_for_screen_proc
     ret
 
 ; input b = y, c = x
@@ -288,58 +530,10 @@ goto_xy:
     add hl, de
 .first_line:
     ld a, l
-    add a, c
+    add c
     ld l, a
     ret nc
     inc h
-    ret
-
-; take the character at the current curosr position and - if different than the current prepared one - make a new inverted bitmap in code 0
-.prepare_cursor_bitmap:
-    ; offset in screen ram = y * width + x... 
-    ld a, (CURSOR_POSITION_Y)
-    ld b,a
-    ld a, (CURSOR_POSITION_X)
-    ld c,a
-    call .calculate_screen_offset
-    ld de, 800h
-    add hl, de
-    ld a, l
-    out (IO_VDP_CONTROL), a
-    ld a, h
-    and 3Fh     ; mask top bits
-    ; or 000h     ; "address selection bit" needs to be zero in read operation.
-    out (IO_VDP_CONTROL), a
-    in a, (IO_VDP_DATA)
-
-    ; now we know the "active" character code in a.
-    ld b, a
-    ld a, (CURSOR_ORIGINAL_CHAR)
-    cp b
-    ret z   ; we already have the correct one!
-
-    ld (CURSOR_ORIGINAL_CHAR), a    ; remember! (this will be used to flip the code between 0/<original> for blinking...)
-
-    ; now, find the character definition in the "name table", read 8 bytes, invert the bottom "count" ones and store for character 0...
-    ld hl, 0
-    ld l, a
-    sla l
-    rl h
-    sla l
-    rl h
-    sla l
-    rl h   ; a * 8
-
-    ld de, 0
-    add hl, de
-    
-
-    ld b, 8
-    ld a, (CURSOR_FLAGS)
-    and CURSOR_FLAG_HEIGHT
-    cp b,c
-
-
     ret
 
 ; Load a (partial?) font definiton into the charset RAM
@@ -357,9 +551,15 @@ load_font:
     or a
     ret z
     inc hl
+    ld c, a
+    push bc
+    push hl
+    call .enable_cursor_for_screen_proc
+    pop hl
+    pop bc
 
     ld d, 0     
-    ld e, a     ; first char index...
+    ld e, c     ; first char index...
     sla e
     rl d
     sla e
@@ -371,16 +571,18 @@ load_font:
     add hl, de
     ; now we have HL -> target address, TOS -> source address. b -> # of chars
 
+
+
     ; setup data transfer in VDP... TODO: disable cursor temporarily... cursor blink might mess up the target address in VDP!
     ld a, l
     out (IO_VDP_CONTROL), a
     ld a, h
-    or a, 040h
+    or 040h
     out (IO_VDP_CONTROL), a
 
     ; now, get the source address from the stack...
     pop hl
-    inc hl  ; ??? why?
+    ;inc hl  ; ??? why?
     ld c, IO_VDP_DATA   ; output port...
     ld d, b
     ld a, 8 ; 8 bytes per char...
@@ -390,7 +592,7 @@ load_font:
     dec a
     jr nz, .repeat_load
 
-    ; TODO: enable cursor again...
+    call .enable_cursor_for_screen_proc
 
     ret
 
