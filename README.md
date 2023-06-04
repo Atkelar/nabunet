@@ -11,6 +11,7 @@ not stop just because "somebody else already did something similar" :)
 ## Revisions
 
   - Initial version, 2023-04-23
+  - First steps Firmware/Config program, 2023-05-27
 
 ## References used
 
