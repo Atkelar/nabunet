@@ -75,7 +75,7 @@ SLOT_3_CALLBACK:        equ SLOT_2_CALLBACK + 2
 
 
 UI_BUFFER:              equ SLOT_3_CALLBACK + 2     ; used for - e.g. the readline function.
-UI_BUFFER_LENGTH:       equ 41
+UI_BUFFER_LENGTH:       equ 132
 UI_VARIABLES_BASE:      equ UI_BUFFER + UI_BUFFER_LENGTH
 UI_END:                 equ UI_VARIABLES_BASE + 10  ; 10 bytes should do the trick for now...
 

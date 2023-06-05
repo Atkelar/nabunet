@@ -58,6 +58,7 @@ main_menu:
 .main_menu_loop:        ; TODO: better (centralized?) menu handling...
     call .update_status
     call get_key
+    ld b, 0
     cp 035h ; "5"   - Reboot
     call z, .ask_reboot
 
@@ -67,7 +68,11 @@ main_menu:
     cp 039h ; "9"   - hidden - keyboard test...
     call z, .keyboard_test
 
-    jp .main_menu_loop
+    ld a, b
+    or a
+    
+    jr z, .main_menu_loop
+    jp main_menu
 
 
 .keyboard_test:

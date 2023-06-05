@@ -178,6 +178,18 @@ modem_mac_formatted:
 modem_version_string:
     defs 32
 
+modem_wifi_enabled:
+    defb 0
+modem_wifi_ssid_set:
+    defb 0
+modem_wifi_key_set:
+    defb 0
+modem_wifi_status:
+    defb 0
+modem_wifi_signal:
+    defb 0
+
+menu_temp_vars:
     defs 256
 
 

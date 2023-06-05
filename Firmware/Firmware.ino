@@ -25,7 +25,7 @@
 // use serial port for diagnostic output. If set, the regular Nabu port will be not functioning!
 // defining this will not enable the level converter and keep the serial IO to any connected
 // programmer for looking into diagnostic outputs. see also: diag macros!
-// #define SERIALDIAG
+//#define SERIALDIAG
 
 
 /*mk
@@ -221,9 +221,9 @@ struct ConfigurationInfo
 
   int ChannelCode;
   
-  char SSID[128];
-  char NetworkKey[128];
-  char NetworkHost[256];
+  char SSID[33];
+  char NetworkKey[65];
+  char NetworkHost[121];
   char NetworkUserName[40];
   char NetworkUserToken[16];
 
@@ -236,9 +236,9 @@ struct ConfigurationInfo
 // as normal variables and copy them over during load/save.
 int ConfigFlags;
 int ChannelCode;
-char SSID[128];
-char NetworkKey[128];
-char NetworkHost[256];
+char SSID[33];
+char NetworkKey[65];
+char NetworkHost[121];
 char NetworkUserName[40];
 char NetworkUserToken[16];
 char ConfigImageVersion[32];
@@ -461,7 +461,7 @@ void save_config_noindicator()
 
   strncpy(info->SSID, SSID, 127);
   strncpy(info->NetworkKey, NetworkKey, 127);
-  strncpy(info->NetworkHost, NetworkHost, 255);
+  strncpy(info->NetworkHost, NetworkHost, 120);
   strncpy(info->NetworkUserName, NetworkUserName, 39);
   memcpy(NetworkUserToken, info->NetworkUserToken, 16);
   strncpy(info->ConfigImageVersion, ConfigImageVersion, 31);
@@ -542,9 +542,9 @@ void load_or_init_config()
   ConfigImageSize = 0;
   ForceChannelQuery = false;
   
-  memset(SSID,0,128);
-  memset(NetworkKey,0,128);
-  memset(NetworkHost,0,256);
+  memset(SSID,0,33);
+  memset(NetworkKey,0,65);
+  memset(NetworkHost,0,121);
   memset(NetworkUserName,0,40);
   memset(NetworkUserToken,0,16);
   memset(ConfigImageVersion, 0, 32);
@@ -563,9 +563,9 @@ void load_or_init_config()
         ConfigImageSize = info->ConfigImageSize;
         ActiveConfigFile = info->ActiveConfigFile;
         
-        strncpy(SSID, info->SSID, 127);
-        strncpy(NetworkKey, info->NetworkKey, 127);
-        strncpy(NetworkHost, info->NetworkHost, 255);
+        strncpy(SSID, info->SSID, 32);
+        strncpy(NetworkKey, info->NetworkKey, 64);
+        strncpy(NetworkHost, info->NetworkHost, 120);
         strncpy(NetworkUserName, info->NetworkUserName, 39);
         memcpy(NetworkUserToken, info->NetworkUserToken, 16);
         strncpy(ConfigImageVersion, info->ConfigImageVersion, 31);
@@ -587,7 +587,7 @@ void load_or_init_config()
   {
     diag("\nEEPROM config invalid, resetting...\n");
     digitalWrite(PIN_LED_ERR, LED_ON);
-    strncpy(NetworkHost, DEFAULT_SERVER_URL, 127);
+    strncpy(NetworkHost, DEFAULT_SERVER_URL, 120);
     
     save_config_noindicator();
 
@@ -788,9 +788,55 @@ void SetNabuNetError()
 
 char nn_reportedConfigProgramVersion[33];
 
+bool wifi_ScanRunning = false;
+int wifi_scan_current_page = -1;
+int wifi_scan_page_size = 8;
+
+byte TranslateCurrentWiFiStatus()
+{
+  switch(WiFi.status())
+  {
+    case WL_IDLE_STATUS:
+    case WL_NO_SSID_AVAIL:
+    case WL_DISCONNECTED:
+      return 0;
+    case WL_CONNECTED:
+      return 1;
+    case WL_CONNECT_FAILED:
+      return 2;
+    case WL_WRONG_PASSWORD:
+      return 3;
+  }
+  return 0xFF;
+}
+
+byte TranslateWiFiEncryption(uint8_t type)
+{
+  switch (type)
+  {
+    case ENC_TYPE_NONE:
+      return 0;
+    case ENC_TYPE_WEP:
+    case ENC_TYPE_TKIP:
+    case ENC_TYPE_CCMP:
+    case ENC_TYPE_AUTO:
+      return 1;
+  }
+  return 2;
+}
+
+byte TranslateStrength(int dbm)
+{
+  if (dbm <= -100)
+    return 0;
+  if (dbm >= -50)
+    return 100;
+  return 2 * (dbm + 100); // 0..100
+}
+
 bool HandleModemConfigCommand(bool isReply, byte* payload, int payloadLength)
 {
-  if (payloadLength > 0 && !isReply)
+  if (!isReply && payloadLength >= 1)
   {
     switch(payload[0])
     {
@@ -820,6 +866,136 @@ bool HandleModemConfigCommand(bool isReply, byte* payload, int payloadLength)
         }
         buffer[0] = 0;
         return NabuNetSend(0xF, true, buffer, 1);
+      case 0x01:  // query WiFi status
+        // we want: 
+        //   WiFi enabled in cofig ?
+        //   WiFi SSID configured  ?
+        //   WiFi Key configured   ?
+        //   WiFi status: off/connecting/connected
+        //      if connected: signal strength
+        //                    IP Address
+
+        buffer[0] = (ConfigFlags & CONFIG_FLAG_USE_WIFI) != 0 ? 1 : 0;
+        buffer[1] = (SSID[0] != 0) ? 1 : 0;
+        buffer[2] = (NetworkKey[0] != 0) ? 1 : 0;
+        buffer[3] = TranslateCurrentWiFiStatus();
+        if (buffer[3]==1)
+        {
+          buffer[4] = TranslateStrength(WiFi.RSSI());
+        }
+        else
+        {
+          buffer[4] = 0;
+        }
+        return NabuNetSend(0xF, true, buffer, 5);
+      case 0x02: // start WiFi scan
+        if (WiFi.getMode() ==WIFI_OFF)
+        {
+          if (!WiFi.mode(WIFI_STA))
+          {
+            buffer[0] = 0xFF;
+            return NabuNetSend(0xF, true, buffer, 1);
+          }
+        }
+
+        if (wifi_ScanRunning)
+        {
+          buffer[0] = 0;
+          return NabuNetSend(0xF, true, buffer, 1);
+        }
+
+        WiFi.scanDelete();  // clear out old results if any...
+        wifi_scan_current_page = -1;
+        wifi_scan_page_size = (payloadLength > 1) ? payload[1] : 8;
+        
+        wifi_ScanRunning = WiFi.scanNetworks(true, true) == WIFI_SCAN_RUNNING;
+        buffer[0] = wifi_ScanRunning ? 0 : 1;
+        return NabuNetSend(0xF, true, buffer, 1);
+      case 0x03: // SSID Scan complete?
+        if (wifi_ScanRunning)
+        {
+          if (WiFi.scanComplete() >= 0)
+          {
+            wifi_ScanRunning = false;
+            wifi_scan_current_page = 0;
+            buffer[0] = 1;  // scan is DONE.
+          }
+          else
+            buffer[0] = 2;  // scan is RUNNING.
+        }
+        else
+          buffer[0] = WiFi.scanComplete() >= 0 ? 1 : 0; // done or not started.
+        return NabuNetSend(0xF, true, buffer, 1);
+      case 0x04: // Get Current SSID page info. We "page"; this way, we can have "no knowledge" of current page number and have any number of networks and we can transfer one entry at a time.
+        {
+          int n = WiFi.scanComplete();
+          if (n>=0 && wifi_scan_page_size > 0)
+          {
+            int numPages = ((n-1) / wifi_scan_page_size) + 1; // 8 entries at 8 per page => 1, 9 entries -> 2
+            buffer[0] = (wifi_scan_current_page > 0) ? 1 : 0; // can go back...
+            buffer[1] = (wifi_scan_current_page + 1 < numPages) ? 1 : 0; // can go forward...
+            buffer[2] = buffer[1] == 1 ? wifi_scan_page_size : wifi_scan_page_size - (n % wifi_scan_page_size);
+            return NabuNetSend(0xF, true, buffer, 3);
+          }
+          buffer[0] = 0;
+          buffer[1] = 0;
+          buffer[2] = 0;
+          return NabuNetSend(0xF, true, buffer, 3);
+        }
+      case 0x05: // move page...
+      {
+        int n = WiFi.scanComplete();
+        if (n>=0 && wifi_scan_page_size > 0)
+        {
+          int numPages = ((n-1) / wifi_scan_page_size) + 1; // 8 entries at 8 per page => 1, 9 entries -> 2
+          switch (payloadLength > 1 ? payload[1] : 0)
+          {
+             case 1:
+              // move forward after read...
+              if (wifi_scan_current_page + 1 < numPages)
+                wifi_scan_current_page++;
+              break;
+            case 2:
+              if (wifi_scan_current_page > 0)
+                wifi_scan_current_page--;
+              break;
+            case 3:
+              wifi_scan_current_page = numPages-1;
+              break;
+            case 4:
+              wifi_scan_current_page = 0;
+              break;
+          }
+          buffer[0] = (wifi_scan_current_page > 0) ? 1 : 0; // can go back...
+          buffer[1] = (wifi_scan_current_page + 1 < numPages) ? 1 : 0; // can go forward...
+          buffer[2] = buffer[1] == 1 ? wifi_scan_page_size : wifi_scan_page_size - (n % wifi_scan_page_size);
+          return NabuNetSend(0xF, true, buffer, 3);
+        }
+        buffer[0] = 0;
+        buffer[1] = 0;
+        buffer[2] = 0;
+        return NabuNetSend(0xF, true, buffer, 3);
+      }
+      case 0x06: // Get SSID entry info. current page, entry "n"...
+      {
+        int n = WiFi.scanComplete();
+        int o = payloadLength > 1 ? payload[1] : 0;
+        if (n>=0 && wifi_scan_page_size > 0 && o < wifi_scan_page_size)
+        {
+          o = wifi_scan_current_page * wifi_scan_page_size + o;
+          if (o < n)
+          {
+            buffer[0] = TranslateWiFiEncryption(WiFi.encryptionType(o));
+            buffer[1] = TranslateStrength(WiFi.RSSI(o));
+            buffer[34] = 0; // catch too long SSID.
+            strncpy(((char*)buffer+2), WiFi.SSID(o).c_str(), 32);
+            return NabuNetSend(0xF, true, buffer, 2 + strlen((const char*)buffer+2));
+          }
+        }
+        buffer[0]=0;
+        buffer[1]=0;
+        return NabuNetSend(0xF, true, buffer, 2);
+      }
     }
   }
   return true;

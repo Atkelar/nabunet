@@ -17,6 +17,7 @@ prompt_yes_no:
     ld c, 2
     call goto_xy
 
+    ; TODO: cancel?
     ld hl, .prompt_title
     call print
 
@@ -49,9 +50,10 @@ prompt_yes_no:
     jr z, .prompt_yes
     cp KBD_VKEY_NO
     jr z, .prompt_no
-    ; TODO: find out what ESC maps to... and handle IF cancel is allowed!
-    ; cp 
-    ; ret z
+    ; TODO: Cancel handle only IF is allowed!
+    cp 01bh ;  ESC
+    jr z, .prompt_cancel
+
     jr .prompt_key_loop
 
 .prompt_yes:
