@@ -16,6 +16,7 @@ class NabuHandlerBase
     virtual bool handle_buffer(NabuIOHandler* source) = 0;
     virtual bool handle_idle(NabuIOHandler* source) = 0;
     virtual void block_received(int blockNumber, int bytes, bool lastBlock) = 0;
+    virtual void reset_handler() = 0;
 
   protected:
     
@@ -30,6 +31,7 @@ class NabuIOHandler
     void clear_receive();
 
     void set_active_handler(NabuHandlerBase* newHandler);
+    void reset_handler();
 
     bool handle_received(unsigned char input);
     bool handle_idle();

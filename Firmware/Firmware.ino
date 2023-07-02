@@ -49,6 +49,10 @@
  *  
  *  5.: Enable HCCA interface and wait for commmunication...
  *  
+ *  The modem connects to the server via a websocket;
+ *  This enables HTTPS transparent connectivity and still
+ *  supports active server to client communication
+ *  WebSocketClient library from https://github.com/hellerchr/esp8266-websocketclient
  *  
  * 
  */

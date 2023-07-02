@@ -12,6 +12,12 @@
 
 NabuNetModem Modem;
 
+
+#define HCCA_MODE_NONE 0
+#define HCCA_MODE_NATIVE 1
+#define HCCA_MODE_NABUNET 2
+
+
 // SD card root object... initialized during setup, so we don't yet support
 // "hot plug or unplug" for the SD card; this might change eventually. There just 
 // wasn't a pin available that would be useful for the "detect card" switch.
@@ -31,6 +37,7 @@ void onWifiDisconnect(const WiFiEventStationModeDisconnected& event) {
 
 void NabuNetModem::init()
 {
+  VirtualServerCode = 0;
   int retry = 0;
   while (retry < 10)
   {
@@ -53,12 +60,15 @@ void NabuNetModem::init()
     SDCardDetected = sd.fatType() != 0; // supported FS?
   }
 
-  NabuIO.set_active_handler(new HCCAHandler(false, 0));
+  CurrentHCCAMode = HCCA_MODE_NONE;
+  NabuIO.set_active_handler(NULL);
 
   LocalServerAvailbale = false;
   ForceChannelQuery = false;
   WiFiAvailable = false;
   IsServicingMode = false;
+
+  PossibleNabuNetSync = 0;
 
   PanicCode = 0;
 
@@ -108,6 +118,21 @@ bool NabuNetModem::check_and_initilize_local_server()
   return ModemConfig.wants_local_server();
 }
 
+// sets the running virtual server code; is set during the most recent boot process;
+void NabuNetModem::set_active_virtual_server(int code)
+{
+  if (code < 0 || code > 0xFFFF)
+    return;
+  VirtualServerCode = code;
+}
+
+// returns the virtual server that was requested, or zero if the current server doesn't support any.
+int NabuNetModem::get_active_virtual_server()
+{
+  if (VirtualServerCode != 0 && ServerHandler::current()->validate_virtual_server(VirtualServerCode))
+    return VirtualServerCode;
+  return 0;
+}
 
 bool NabuNetModem::check_and_initilize_wifi() 
 {
@@ -327,6 +352,13 @@ bool NabuNetModem::wait_signal_released()
   return false; // we snapped to error mode...
 }
 
+
+void NabuNetModem::boot_image_possibly_ready()
+{
+  // if the current server wants to switch, don't let it wait for try #2...
+  NabuNetSyncSequenceCount = 1;
+}
+
 // Overall nabu <-> server communication loop.
 bool NabuNetModem::handle_modem_running()
 {
@@ -335,7 +367,7 @@ bool NabuNetModem::handle_modem_running()
   {
     int byteInput = Serial.read();
     // TODO: add "nabu net reset request detection" here, similar to the Nabu reset...
-    if (byteInput == 0x83)    // wait for two 0x83 bytes in slow succession for Nabu reset detection...
+    if (byteInput == 0x83 && PossibleNabuNetSync == 0)    // wait for two 0x83 bytes in slow succession for Nabu reset detection...
     {
       diag("x");
       // maybe?
@@ -346,7 +378,7 @@ bool NabuNetModem::handle_modem_running()
         {
           diag("RESET!");
           // Gotcha!
-          NabuIO.set_active_handler(new HCCAHandler(!IsServicingMode && ForceChannelQuery, IsServicingMode ? 0 : ModemConfig.ActiveConfig.ChannelCode));  // force back to HCCA handler for booting...
+          switch_mode_native();
           NabuIO.clear_send();
           NabuIO.clear_receive();
           // we will pick up the byte downstairs...
@@ -356,7 +388,63 @@ bool NabuNetModem::handle_modem_running()
         HCCAResetSequenceCount = 0;
     }
     else
-      HCCAResetSequenceCount = 0;
+    { // we wait for a NabuNet sync request, followed by another one after a few ms...
+      // reset request is: 0x80-1-X-Y 
+      if (PossibleNabuNetSync == 2 && (now - LastHCCAInput < 10) && ((LastHCCAByte + byteInput + 1 + 0x80) & 0xFF) == 0xFF) // Yes, could be...
+      {
+//            diag_blink_byte(0x12);
+  //          now = millis();
+        NabuNetSyncSequenceCount++;
+        PossibleNabuNetSync = 0;
+      }
+      else
+      {
+        if (byteInput == 1 && LastHCCAByte == 0x80 && PossibleNabuNetSync == 0 && (now - LastHCCAInput < 10)) // Sync payload byte..
+        {
+          PossibleNabuNetSync = 1;  // could be...
+        }
+        else
+        {
+          if (byteInput != 0 && PossibleNabuNetSync == 1 && (now - LastHCCAInput < 10)) // First sync byte...
+          {
+//            diag_blink_byte(0x20);
+  //          now = millis();
+            // first two bytes add up to 0x80-1 - LastHCCAByte will be X, so if current byte == 0xff-X we got one....
+            PossibleNabuNetSync = 2;
+          }
+          else
+          { // nope.
+            if (PossibleNabuNetSync > 0)
+            {
+//              diag_blink_byte(0x10);
+  //            now = millis();
+              NabuNetSyncSequenceCount=0;
+              PossibleNabuNetSync = 0;
+            }
+          }
+        }
+      }
+      if (NabuNetSyncSequenceCount > 1 && ServerHandler::current()->virtual_server_is_nabunet(get_active_virtual_server())) //
+      {
+        PossibleNabuNetSync = 0;
+        HCCAResetSequenceCount = 0;
+        NabuNetSyncSequenceCount = 0;
+        diag("RESET NabuNet!");
+        // Gotcha!
+        switch_mode_nabunet();
+        NabuIO.clear_send();
+        NabuIO.clear_receive();
+        if (!NabuIO.handle_received(0x80)) // jump start with current sync request...
+          return false;
+        if (!NabuIO.handle_received(1))
+          return false;
+        if (!NabuIO.handle_received(LastHCCAByte))
+          return false;
+        //NabuIO.handle_received(byteInput);
+      }
+//      if (now - LastHCCAInput > 100)
+//          PossibleNabuNetSync = 0;  // start over... on the packet detection....
+    }
     // write byte to input buffer anyhow...
     LastHCCAInput = now;
     LastHCCAByte = byteInput;
@@ -372,10 +460,30 @@ bool NabuNetModem::handle_modem_running()
   return NabuIO.flush_send();  // make sure we got the send code...
 }
 
+
+
 void NabuNetModem::switch_mode_nabunet()
 {
-  NabuIO.set_active_handler(new NabuNetHandler(IsServicingMode));
+  if (CurrentHCCAMode == HCCA_MODE_NABUNET)
+    NabuIO.reset_handler();
+  else
+  {
+    CurrentHCCAMode = HCCA_MODE_NABUNET;
+    NabuIO.set_active_handler(new NabuNetHandler(IsServicingMode));
+  }
 }
+
+void NabuNetModem::switch_mode_native()
+{
+  if (CurrentHCCAMode == HCCA_MODE_NATIVE)
+    NabuIO.reset_handler();
+  else
+  {
+    CurrentHCCAMode = HCCA_MODE_NATIVE;
+    NabuIO.set_active_handler(new HCCAHandler(!IsServicingMode && ForceChannelQuery, IsServicingMode ? 0 : ModemConfig.ActiveConfig.ChannelCode));  // force back to HCCA handler for booting...
+  }
+}
+
 
 bool NabuNetModem::handle_state_loop()
 {

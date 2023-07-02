@@ -17,6 +17,11 @@ HCCAHandler::HCCAHandler(bool forceChannelQuery, int channelNumber) : NabuHandle
 
 unsigned char hcca_transfer_buffer[300];
 
+void HCCAHandler::reset_handler()
+{
+  State = HCCA_STATE_BOOT;
+}
+
 bool HCCAHandler::handle_buffer(NabuIOHandler* source) 
 {
   int readByte;
@@ -103,6 +108,7 @@ bool HCCAHandler::handle_buffer(NabuIOHandler* source)
         {
           source->send_byte(0xE4);  // send confirmation...
           State = HCCA_STATE_WAIT_FOR_BOOT;
+          Modem.set_active_virtual_server(ChannelNumber); // we are set...
         }
         else
         {
@@ -169,11 +175,6 @@ bool HCCAHandler::handle_buffer(NabuIOHandler* source)
       {
         if (readByte != -1)
         {
-          if (readByte == 0 && ServerHandler::current()->virtual_server_is_nabunet(ChannelNumber))
-          {
-            Modem.switch_mode_nabunet();
-            return source->handle_received(0);
-          }
           source->send_byte(0x00);
           State = HCCA_STATE_WAIT_FOR_BLOCK_REQUEST;  // try to re-sync...
         }
@@ -229,6 +230,9 @@ bool HCCAHandler::handle_buffer(NabuIOHandler* source)
         }
         source->send_byte(0x10);
         source->send_byte(0xe1);
+
+        if (IsLastBlock)
+          Modem.boot_image_possibly_ready();
   
         State = HCCA_STATE_WAIT_FOR_BLOCK_REQUEST;   // even at the last loaded block, wait for another one, it might be the last one is broken...
       }

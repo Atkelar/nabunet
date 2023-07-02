@@ -66,6 +66,12 @@ bool NabuNetConfig::wants_wifi()
   return (ActiveConfig.Flags & CONFIG_FLAG_USE_WIFI) != 0;
 }
 
+bool NabuNetConfig::ignore_tls_errors()
+{
+  return (ActiveConfig.Flags & CONFIG_FLAG_IGNORE_TLS_ERRORS) != 0;
+}
+
+
 // try to read the EEPROM content and see if we have any old data. 
 // Initialize WiFi and other parameters accordingly if we haven't.
 void NabuNetConfig::load_or_init_config()

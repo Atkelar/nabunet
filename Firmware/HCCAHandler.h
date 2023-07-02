@@ -34,7 +34,7 @@ class HCCAHandler
 
     bool handle_buffer(NabuIOHandler* source) override;
     bool handle_idle(NabuIOHandler* source) override;
-
+    void reset_handler() override;
     void block_received(int blockNumber, int bytes, bool lastBlock) override;
 
   private:

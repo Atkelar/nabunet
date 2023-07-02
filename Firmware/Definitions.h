@@ -35,6 +35,7 @@
 #define ERROR_SIGNAL_WIFIFAILED 3   // WiFi was configured, but has failed to connect to the remote server.
 #define ERROR_SIGNAL_NOSERVER 4     // No server available; Both WiFi and Local server are not available.
 #define ERROR_SIGNAL_FATAL_COM_ERROR 5  // the modem communication failed in an unexpected way.
+#define ERROR_SIGNAL_REMOTE_CONN_FAILED 6 // remote server didn't reply or replied out of bounds
 
 // the maximum send/receive buffer sizes
 // tx buffer might need up to 512bytes + spare for 

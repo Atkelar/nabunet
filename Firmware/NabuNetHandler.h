@@ -22,7 +22,7 @@ class NabuNetHandler
 
     void block_received(int blockNumber, int bytes, bool lastBlock) override;
     
-    void reset();
+    void reset_handler() override;
 
   private:
     bool handle_modem_config_command(NabuIOHandler* source, bool isReply, unsigned char* payload, int payloadLength);

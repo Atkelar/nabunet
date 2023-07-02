@@ -3,6 +3,7 @@
 
 #include "Definitions.h"
 #include "Arduino.h"
+#include "WebSocketClient.h"
 
 class ServerHandler;
 class ConfigServerHandler;
@@ -94,16 +95,23 @@ class RemoteServerHandler
 
     bool request_block_for_hcca(int channelNumber, unsigned char a1, unsigned char a2, unsigned char a3, int blockNumber, int blockLength, void * target) override {return false;}
     bool has_virtual_servers() override { return false; }
-    unsigned char api_level() override { return 0; }
+    unsigned char api_level() override { return RemoteServerApiLevel; }
     bool has_login() { return false; }
     bool is_logged_in() { return false; }
     bool is_read_only() { return true; }
     String server_name() { return "Modem Configuration"; }
     String server_version() { return NABUNET_MODEM_FIRMWARE_VERSION; }
-    bool is_connected() { return false; }
+    bool is_connected();
 
     void disconnect();
     bool connect();
+
+  private:
+    WebSocketClient* Connection;
+
+    int RemoteServerApiLevel;
+    char RemoteServerVersion[33];
+    
 };
 
 extern ConfigServerHandler ConfigServerInstance;

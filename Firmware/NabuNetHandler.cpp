@@ -11,11 +11,10 @@
 NabuNetHandler::NabuNetHandler(bool servicing) : NabuHandlerBase()
 {
   IsServicing = servicing;
-  reset();
+  reset_handler();
 }
 
-
-void NabuNetHandler::reset()
+void NabuNetHandler::reset_handler()
 {
   Incoming = false;
   Started = 0;
@@ -615,9 +614,11 @@ bool NabuNetHandler::handle_modem_config_command(NabuIOHandler* input, bool isRe
         shared_buffer[0] = (ModemConfig.ActiveConfig.Flags & CONFIG_FLAG_USE_REMOTE) != 0 ? 1 : 0;
         shared_buffer[1] = RemoteServerInstance.api_level();
         shared_buffer[2] = 0; // TODO RemoteServerFlags;
-        shared_buffer[3] = strlen(RemoteServerInstance.server_version().c_str());
+        shared_buffer[3] = ModemConfig.ignore_tls_errors() ? 1 : 0;
+       
+        shared_buffer[4] = strlen(RemoteServerInstance.server_version().c_str());
         strncpy((char*)(shared_buffer+4), RemoteServerInstance.server_version().c_str(), 32);
-        return send_packet(input, 0xF, true, shared_buffer, 4 + shared_buffer[3]);
+        return send_packet(input, 0xF, true, shared_buffer, 5 + shared_buffer[4]);
       case 0x0B:  // enable/disable Remote...
       {
         bool enableNow = (payloadLength > 1 && payload[1] == 1);
@@ -644,6 +645,26 @@ bool NabuNetHandler::handle_modem_config_command(NabuIOHandler* input, bool isRe
         else
         {
           RemoteServerInstance.disconnect();
+        }
+        shared_buffer[0]=0;  // return code 0 = status updated.
+        return send_packet(input, 0xF, true, shared_buffer, 1);
+      }
+      break;
+      case 0x0C:  // enable/disable ignore TLS errors...
+      {
+        bool newValue = (payloadLength > 1 && payload[1] == 1);
+        if (newValue != ModemConfig.ignore_tls_errors())
+        {
+          if(newValue)
+            ModemConfig.ActiveConfig.Flags |= CONFIG_FLAG_IGNORE_TLS_ERRORS;
+          else
+            ModemConfig.ActiveConfig.Flags &= ~CONFIG_FLAG_IGNORE_TLS_ERRORS;
+          ModemConfig.save_config();
+          if (ModemConfig.ActiveConfig.Flags & CONFIG_FLAG_USE_REMOTE)
+          {
+            if (!RemoteServerInstance.connect())
+              return send_packet(input, 0xF, true, shared_buffer, 1);
+          }
         }
         shared_buffer[0]=0;  // return code 0 = status updated.
         return send_packet(input, 0xF, true, shared_buffer, 1);

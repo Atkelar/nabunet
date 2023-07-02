@@ -40,6 +40,9 @@
 // We have enabled the remote server in the config; this enables WiFi and remote server separation;
 #define CONFIG_FLAG_USE_REMOTE 16 
 
+// Ignore TLS certificate - should be for testing only!
+#define CONFIG_FLAG_IGNORE_TLS_ERRORS 32
+
 // The internal ROM has an active config image. Should only be missing on virgin setups and requires
 // a boot update from SD to fix.
 #define CONFIG_FLAG_HAS_IMAGE 0x8000
@@ -85,6 +88,8 @@ class NabuNetConfig
     bool wants_network_server();
     bool wants_wifi();
     bool wifi_valid();
+
+    bool ignore_tls_errors();
 
     // try to read the EEPROM content and see if we have any old data. 
     // Initialize WiFi and other parameters accordingly if we haven't.

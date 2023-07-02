@@ -33,6 +33,12 @@ void NabuIOHandler::clear_receive()
   RxStart = RxEnd = 0;
 }
 
+void NabuIOHandler::reset_handler()
+{
+  if (_ActiveHandler)
+    _ActiveHandler->reset_handler();
+}
+
 void NabuIOHandler::set_active_handler(NabuHandlerBase* newHandler)
 {
   if (_ActiveHandler)
@@ -98,6 +104,7 @@ int NabuIOHandler::read_byte()
   RxStart = (RxStart + 1) % HCCA_BUFFER_SIZE;
   return value;
 }
+
 int NabuIOHandler::input_length()
 {
   if (RxStart == RxEnd)
