@@ -52,7 +52,8 @@
  *  The modem connects to the server via a websocket;
  *  This enables HTTPS transparent connectivity and still
  *  supports active server to client communication
- *  WebSocketClient library from https://github.com/hellerchr/esp8266-websocketclient
+ *  WebSocketClient source from https://github.com/hellerchr/esp8266-websocketclient
+ *  adapted to provide "has data" feature and "binary" transfers.
  *  
  * 
  */

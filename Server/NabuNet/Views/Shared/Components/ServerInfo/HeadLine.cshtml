@@ -1,0 +1,7 @@
+@model ServerConfig
+<h1>@Model.ServerName</h1>
+<h2>@Model.ServerTagLine</h2>
+@if (Model.ServerMessage != null)
+{
+    <p class="notice">@Model.ServerMessage.Title - <a asp-action="Status" asp-controller="Home">See details</a></p>
+}

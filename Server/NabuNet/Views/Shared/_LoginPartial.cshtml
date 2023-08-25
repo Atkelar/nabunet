@@ -1,0 +1,22 @@
+@if (User.Identity.IsAuthenticated)
+{
+    <!-- 
+        dropdown menu? link to "profile", "messages" and "logout"? 
+        logout needs to be a "post" action and thus a form/link styled button...
+    -->
+    <form asp-action="logout" asp-controller="login"><button type="submit" class="header-button">Logout</button></form>
+    <a class="header-button" asp-action="Index" asp-controller="Profile">@User.Identity.Name</a>
+}
+else
+{
+    <dialog id="login-dialog">
+    <form asp-action="login" asp-controller="login" id="login-form">
+        <input type="text" name="username" maxlength="32" required />
+        <input type="password" name="password" required />
+        <button type="submit">Login...</button>
+    </form>
+</dialog>
+    <a class="header-button" href="/login"
+    onclick="document.getElementById('login-dialog').showModal(); event.preventDefault();">Login</a>
+    <a class="header-button" asp-controller="Profile" asp-action="Signup">Register</a>
+}

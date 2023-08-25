@@ -1,0 +1,58 @@
+@model TokenInfoDto
+
+<h3>Delete token?</h3>
+<div class="notice">WARNING! The token will be deleted permanently!</div>
+<p>
+    The token @if (string.IsNullOrWhiteSpace(Model.Name))
+    {
+        <span>no name</span>
+    }
+    else
+    {
+        <span>@Model.Name</span>
+    }
+    created @Model.IssuedAt with
+    @if (!Model.AnySpecials)
+    {
+        <text>no special permission.</text>
+    }
+    else
+    {
+        <text>the following special permissions</text>
+    }
+    will be deleted permanently!
+</p>
+@if (Model.AnySpecials)
+{
+    <ul>
+    @if (Model.IsSiteAdmin)
+        {
+            <li>Site Admin</li>
+        }
+        @if (Model.IsModerator)
+        {
+            <li>Moderator</li>
+        }
+        @if (Model.IsUserAdmin)
+        {
+            <li>User Admin</li>
+        }
+        @if (Model.IsContentManager)
+        {
+            <li>Content Manager</li>
+        }
+    </ul>
+}
+<p>Make sure you are sure the token isn't needed anywhere anymore before you delete it! You can always create a new
+    token, but never with the same value so all uses of the token must be updated if you accidentally delete a used
+    token!
+</p>
+<p>
+    <a nav-active='@ViewBag.Page == "tokens"' asp-action="index" asp-controller="profile" asp-route-id="tokens">back to
+        your
+        tokens...</a>
+</p>
+<form asp-action="deletetoken">
+    <input type="hidden" name="id" value="@Model.Id" />
+    <button type="submit">Yes, Delete it!</button>
+</form>

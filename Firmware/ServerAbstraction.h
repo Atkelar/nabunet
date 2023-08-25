@@ -8,6 +8,13 @@
 class ServerHandler;
 class ConfigServerHandler;
 
+
+#define SERVER_FLAG_GUEST 1
+#define SERVER_FLAG_LOGIN 2
+#define SERVER_FLAG_READONLY 4
+#define SERVER_FLAG_VIRTUAL 8
+
+
 // abstract class for interfacing with different servers: local, remote and config image.
 class ServerHandler
 {
@@ -27,6 +34,7 @@ class ServerHandler
     virtual String server_name() = 0;
     virtual String server_version() = 0;
     virtual bool is_connected() = 0;
+    virtual int feature_flags()  = 0;
 
     static ServerHandler* current();
     static bool set_current(ServerHandler* newTarget);
@@ -44,7 +52,9 @@ class ConfigServerHandler
     }
 
     bool request_block_for_hcca(int channelNumber, unsigned char a1, unsigned char a2, unsigned char a3, int blockNumber, int blockLength, void * target) override;
-    virtual bool virtual_server_is_nabunet(int code) override { return true; } 
+    bool virtual_server_is_nabunet(int code) override { return true; } 
+    
+    int feature_flags() override { return SERVER_FLAG_READONLY; }
 
     bool has_virtual_servers() override { return false; }
     unsigned char api_level() override { return 0; }
@@ -67,18 +77,24 @@ class LocalServerHandler
     {
       return code == 0; // we only support 0 here.
     }
-    virtual bool virtual_server_is_nabunet(int code) override { return true; } 
+    bool virtual_server_is_nabunet(int code) override { return true; } 
+
+    int feature_flags() override { return SERVER_FLAG_READONLY; }
 
     bool request_block_for_hcca(int channelNumber, unsigned char a1, unsigned char a2, unsigned char a3, int blockNumber, int blockLength, void * target) override {return false;}
     bool has_virtual_servers() override { return false; }
     unsigned char api_level() override { return 0; }
-    bool has_login() { return false; }
-    bool is_logged_in() { return false; }
-    bool is_read_only() { return true; }
-    String server_name() { return "Modem Configuration"; }
-    String server_version() { return NABUNET_MODEM_FIRMWARE_VERSION; }
-    bool is_connected() { return false ; }
+    bool has_login() override { return false; }
+    bool is_logged_in() override { return false; }
+    bool is_read_only() override { return true; }
+    String server_name() override { return "Modem Configuration"; }
+    String server_version() override { return NABUNET_MODEM_FIRMWARE_VERSION; }
+    bool is_connected() override { return false ; }
 };
+
+extern const String NotConnectedServerName;
+extern const String LoadingServerInfoServerName;
+extern const String NotConnectedServerVersion;
 
 class RemoteServerHandler
   : public ServerHandler
@@ -86,22 +102,20 @@ class RemoteServerHandler
   public: 
     RemoteServerHandler();
 
-    bool validate_virtual_server(int code) override 
-    {
-      return code == 0; // we only support 0 here.
-    }
+    bool validate_virtual_server(int code) override;
 
-    virtual bool virtual_server_is_nabunet(int code) override { return true; } 
+    bool virtual_server_is_nabunet(int code) override; 
 
-    bool request_block_for_hcca(int channelNumber, unsigned char a1, unsigned char a2, unsigned char a3, int blockNumber, int blockLength, void * target) override {return false;}
+    bool request_block_for_hcca(int channelNumber, unsigned char a1, unsigned char a2, unsigned char a3, int blockNumber, int blockLength, void * target) override;
     bool has_virtual_servers() override { return false; }
     unsigned char api_level() override { return RemoteServerApiLevel; }
-    bool has_login() { return false; }
-    bool is_logged_in() { return false; }
-    bool is_read_only() { return true; }
-    String server_name() { return "Modem Configuration"; }
-    String server_version() { return NABUNET_MODEM_FIRMWARE_VERSION; }
-    bool is_connected();
+    bool has_login() override;
+    bool is_logged_in() override { return false; }
+    bool is_read_only() override { return true; }
+    String server_name() override { return is_connected() ? (HasServerInfo ? RemoteServerName : LoadingServerInfoServerName) : NotConnectedServerName; }
+    String server_version() override { return is_connected() ? RemoteServerVersion : NotConnectedServerVersion; }
+    bool is_connected() override;
+    int feature_flags() override;
 
     void disconnect();
     bool connect();
@@ -111,7 +125,18 @@ class RemoteServerHandler
 
     int RemoteServerApiLevel;
     char RemoteServerVersion[33];
-    
+    char RemoteServerName[33];
+    bool HasServerInfo;
+    int RemoteFlags;
+
+    int validatedCode;
+    int validatedKernel;
+    int validatedLoader;
+    bool validatedIsNabuNet;
+
+    unsigned char* remote_buffer;
+
+    int RemoteCall(byte sendCode, int sendSize, byte expectResultCode);
 };
 
 extern ConfigServerHandler ConfigServerInstance;

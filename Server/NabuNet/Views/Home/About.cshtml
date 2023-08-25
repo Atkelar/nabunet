@@ -1,0 +1,43 @@
+@model AboutPageModel
+@{
+    ViewData["Title"] = "About";
+}
+<vc:server-info />
+
+@if (Model.Imprint != null)
+{
+    <h2>@Model.Imprint.Title</h2>
+    <markdown content="@Model.Imprint.Article"></markdown>
+}
+
+<h2>Software</h2>
+<p>This server runs version @Model.Version. NabuNet server was developed by Atkelar in 2023.</p>
+<p>The server thinks that the time is @(System.DateTime.Now.ToLongTimeString()) locally, and
+    @(System.DateTime.UtcNow.ToLongTimeString()) UTC.</p>
+<h3>Extra credits</h3>
+@foreach (var item in Model.Libraries)
+{
+    <h4>@item.Item1</h4>
+    <ul>
+    @foreach (var cItem in item.Item2)
+        {
+            <li><strong>@cItem.Name</strong>
+                @if (cItem.Version != null)
+                {
+                    <text> - </text> <span>(@cItem.Version)</span>
+                }
+                @if (cItem.Comment != null)
+                {
+                    <br />
+                    @cItem.Comment
+                }
+                @if (cItem.LicenseUri != null)
+                {
+                <br />
+                Info:
+                    <a href="@cItem.LicenseUri">@cItem.LicenseUri</a>
+                }
+            </li>
+        }
+    </ul>
+}

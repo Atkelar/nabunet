@@ -1,0 +1,57 @@
+@addTagHelper *, Captcha.Core
+@model SignUpModel
+<p>
+    Be sure to read the <a target="_blank" asp-action="Privacy" asp-controller="Home">privacy policy</a> and <a
+        asp-action="TOS" target="_blank" asp-controller="Home">Terms of Service</a> before signing up!
+</p>
+
+<form asp-action="signup" asp-route-returnurl="@ViewBag.ReturnUrl">
+    <div class="inputfield-row">
+        <label asp-for="UserName">User name</label> <input asp-for="UserName" type="text" maxlength="32" /><span
+            asp-validation-for="UserName" class="validation-error"></span>
+    </div>
+    <div class="inputfield-row">
+        <label asp-for="EMail"></label> <input asp-for="EMail" type="email" maxlength="128" /><span
+            asp-validation-for="EMail" class="validation-error"></span>
+    </div>
+    <div class="inputfield-row">
+        <label asp-for="Password"></label> <input asp-for="Password" type="password" /><span
+            asp-validation-for="Password" class="validation-error"></span>
+    </div>
+    <div class="inputfield-row">
+        <label asp-for="PasswordRetype"></label> <input asp-for="PasswordRetype" type="password" /><span
+            asp-validation-for="PasswordRetype" class="validation-error"></span>
+    </div>
+    <div class="inputfield-row">
+        <label asp-for="AcceptToS"></label> <input asp-for="AcceptToS" type="checkbox" /><span
+            asp-validation-for="AcceptToS" class="validation-error"></span>
+    </div>
+    <div class="inputfield-row">
+        @if (!Model.Requries2FA)
+        {
+            <label asp-for="Enable2FA"></label> <input asp-for="Enable2FA" type="checkbox" />
+        }
+        else
+        {
+            <p>This server requires 2FA! You will be prompted to set up your TOTP device after the initial process!</p>
+        }
+    </div>
+    <div class="inputfield-row">
+        <dnt-captcha asp-captcha-generator-max="30" asp-captcha-generator-min="1"
+            asp-captcha-generator-language="English" asp-captcha-generator-display-mode="NumberToWord"
+            asp-use-relative-urls="true" asp-placeholder="Security code as a number"
+            asp-validation-error-message="Please enter the security code as a number." asp-font-name="Tahoma"
+            asp-font-size="20" asp-fore-color="#333333" asp-back-color="#FCF6F5FF" asp-text-box-template="{0}"
+            asp-validation-message-class="validation-error" asp-refresh-button-class="bi-arrow-counterclockwise btn-lg"
+            asp-show-refresh-button="true" asp-dir="ltr" />
+    </div>
+    <div class="inputfield-row">
+        <button type="submit">Register...</button>
+        <div asp-validation-summary="All" class="validation-error"></div>
+    </div>
+</form>
+
+@section Scripts
+    {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,45 @@
+@model LoginModel
+<h1>Welcome! Please sign up or login!</h1>
+
+<h2>Login</h2>
+<form asp-action="login" asp-route-returnurl="@ViewBag.ReturnUrl">
+    <div class="inputfield-row">
+        <input asp-for="UserName" type="text" maxlength="32" /><span asp-validation-for="UserName"></span>
+    </div>
+    <div class="inputfield-row">
+        <input asp-for="Password" type="password" /><span asp-validation-for="Password"></span>
+    </div>
+    <div class="inputfield-row">
+        <button type="submit">Login...</button>
+    </div>
+    <div asp-validation-summary="All"></div>
+</form>
+
+<!-- this div will be hidden depending on server settings -->
+<h2>Sign up...</h2>
+<p>
+    you can create a new user account <a asp-action="Signup" asp-controller="Profile"
+        asp-route-returnUrl="@ViewBag.ReturnUrl">over here</a>...
+</p>
+<p>
+    Be sure to read the <a asp-action="Privacy" asp-controller="Home">privacy policy</a> and <a asp-action="TOS"
+        asp-controller="Home">Terms of Service</a> before signing up!
+</p>
+
+<!-- this div will be hidden depending on server settings -->
+<p>Sorry; This server currently doesn't allow public sign ups!</p>
+<!-- this div will be hidden depending on server settings -->
+<h2>Guest...</h2>
+<p>
+    you can create a temporary (guest) account to try out our services too <a asp-route-returnUrl="@ViewBag.ReturnUrl"
+        asp-action="GuestRequest" asp-controller="Profile">over here</a>...
+</p>
+<p>
+    Be sure to read the <a asp-action="Privacy" asp-controller="Home">privacy policy</a> and <a asp-action="TOS"
+        asp-controller="Home">Terms of Service</a> before signing up, even as a temporary guest user!
+</p>
+
+@section Scripts
+    {
+    <partial name="_ValidationScriptsPartial" />
+}

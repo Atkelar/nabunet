@@ -1,0 +1,26 @@
+@model ConfirmMailForAccountModel
+<h1>Validate your e-mail...</h1>
+<p>Please confirm that the provided e-mail of <span>@Model.EMail</span>, by re-entering your password below.</p>
+<p>If this connection was not requested by you, you can just leave without further action!</p>
+
+<form asp-action="mailvalidate" asp-route-returnurl="@ViewBag.ReturnUrl">
+    <div class="inputfield-row">
+        <label asp-for="UserName"></label> <input type="text" readonly="readonly" asp-for="UserName" />
+    </div>
+    <div class="inputfield-row">
+        <label asp-for="Password"></label> <input type="password" asp-for="Password" />
+    </div>
+    <div class="inputfield-row">
+        <input type="hidden" asp-for="ValidationCode" />
+        <input type="hidden" asp-for="Token" />
+        <input type="hidden" asp-for="EMail" />
+    </div>
+    <div class="inputfield-row">
+        <button type="submit">Confirm!</button>
+    </div>
+    <div asp-validation-summary="All"></div>
+</form>
+@section Scripts
+    {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -19,7 +19,7 @@ void NabuNetConfig::save_config(bool showIndicator)
 {
   if (showIndicator)
     digitalWrite(PIN_LED_IO, LED_ON);
-  save_config();
+  save_config_now();
   if (showIndicator)
     digitalWrite(PIN_LED_IO, LED_OFF);
 }
@@ -69,6 +69,15 @@ bool NabuNetConfig::wants_wifi()
 bool NabuNetConfig::ignore_tls_errors()
 {
   return (ActiveConfig.Flags & CONFIG_FLAG_IGNORE_TLS_ERRORS) != 0;
+}
+
+void NabuNetConfig::set_ignore_tls_errors(bool newValue)
+{
+  if(newValue)
+    ActiveConfig.Flags |= CONFIG_FLAG_IGNORE_TLS_ERRORS;
+  else
+    ActiveConfig.Flags &= ~CONFIG_FLAG_IGNORE_TLS_ERRORS;
+  save_config();
 }
 
 

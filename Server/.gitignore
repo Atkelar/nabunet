@@ -1,0 +1,4 @@
+**/bin
+**/obj
+**/tmp
+**/*.tar.gz

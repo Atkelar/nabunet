@@ -1,0 +1,22 @@
+﻿@model BaseArticle?
+@{
+    ViewData["Title"] = "Server Status";
+}
+
+@if (Model == null)
+{
+    <h1 class="display-4">Current status...</h1>
+    <p>...there is no active announcement!</p>
+}
+else
+{
+    <h1 class="display-4">@Model.Title</h1>
+    <markdown class="infoarea" content="@Model.Article"></markdown>
+    @if (Model.ReferenceDate.HasValue)
+    {
+        <p>The information is about <time
+        absolute="@Model.ReferenceDate"></time>, which is <time
+        relative="@Model.ReferenceDate"></time>.</p>
+    }
+}
+</div>

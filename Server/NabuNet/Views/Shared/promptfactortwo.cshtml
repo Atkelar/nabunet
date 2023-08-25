@@ -1,0 +1,14 @@
+@model LoginModel2FA
+
+<h1>Enter Security Code</h1>
+<form asp-action="steptwo" asp-controller="login" asp-route-returnurl="@ViewBag.ReturnUrl">
+    <input asp-for="LoginToken" type="hidden" />
+    <input asp-for="UserName" type="hidden" />
+    <label asp-for="ResponseCode"></label><input type="number" asp-for="ResponseCode" /> <span
+        asp-validation-for="ResponseCode"></span>
+    <button type="submit">Login...</button>
+</form>
+@section Scripts
+    {
+    <partial name="_ValidationScriptsPartial" />
+}

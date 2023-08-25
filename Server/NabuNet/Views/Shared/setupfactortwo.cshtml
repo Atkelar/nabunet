@@ -1,0 +1,20 @@
+@model Setup2FAModel
+<h1>Please confirm...</h1>
+<p>Plaese use your 2FA token application to scan this TOTP based QR Code (or click on it) and enter your first (current)
+    code as a confirmation!</p>
+<p>
+    <a href="@Model.Parameters.OTPUrl">@Html.Raw(Model.Parameters.QRCode)</a>
+</p>
+
+<form asp-action="confirm2fa" asp-route-returnurl="@ViewBag.ReturnUrl">
+    <input type="hidden" asp-for="Token" />
+    <input type="hidden" asp-for="UserName" />
+    <label asp-for="Code"></label> <input type="number" asp-for="Code" /> <span asp-validation-for="Code"></span>
+    <button type="submit">Confirm!</button>
+    <div asp-validation-summary="All"></div>
+</form>
+
+@section Scripts
+    {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,47 @@
+@model ProfileSecurityInfo
+@{
+    ViewBag.page = "security";
+}
+
+<partial name="_NavTabsPartial"></partial>
+
+<h3>Change password...</h3>
+@if (Model.PasswordChanged)
+{
+    <div class="info">Your password has been changed!</div>
+}
+<form asp-action="ChangePassword">
+    <div class="inputfield-row">
+    <label for="CurrentPassword">Current</label> <input type="password" name="CurrentPassword" required
+        id="CurrentPassword" />
+    </div>
+    <div class="inputfield-row">
+    <label for="NewPassword">New</label> <input type="password" name="NewPassword" required id="NewPassword" />
+    </div>
+    <div class="inputfield-row">
+    <label for="NewPasswordRetype">Retype</label> <input type="password" name="NewPasswordRetype" required
+        id="NewPasswordRetype" />
+    </div>
+    <div class="inputfield-row">
+    <button type="submit">Change Password</button>
+    @if (Model.PasswordChangeError != null)
+    {
+        <div class="validation-error">@Model.PasswordChangeError</div>
+    }
+    <div class="validation-error" asp-validation-summary="All"></div>
+    </div>
+</form>
+
+<h3>2FA Authentication</h3>
+@if (Model.IsMFAEnabled)
+{
+    <p>Your account has 2FA (TOTP) authentication enabled.</p>
+}
+else
+{
+    <p>Consider enabling 2FA for your account!</p>
+    <form asp-action="enablemfa">
+    <button type="submit">Enable 2FA</button>
+    </form>
+}
+@* <button type="submit">Update...</button> *@

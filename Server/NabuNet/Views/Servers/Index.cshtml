@@ -1,0 +1,40 @@
+@model ServerListModel
+
+<table>
+    <tr>
+        <th>Code</th>
+        <th>Name</th>
+        <th>Owner</th>
+        <th>Active?</th>
+    </tr>
+    <tr>
+        <td>
+            <vserver code="@Model.RootServer.Code"></vserver>
+        </td>
+        <td>@Model.RootServer.Name</td>
+        <td>@Model.RootServer.Owner</td>
+        <td>@(Model.RootServer.IsActive ? "Yes" : "No")</td>
+    </tr>
+    @if (Model.HasVirtualServers)
+    {
+        @foreach (var item in Model.Virtuals)
+        {
+            <tr>
+                <td>
+                    <vserver code="@item.Code"></vserver>
+                </td>
+                <td>@item.Name</td>
+                <td>@item.Owner</td>
+                <td>@(item.IsActive ? "Yes" : "No")</td>
+            </tr>
+        }
+    }
+    else
+    {
+        <tr>
+            <td colspan="4">This server is configured to only host one Nabu server, i.e.
+                only server "00000" will be presented to the clients.
+            </td>
+        </tr>
+    }
+</table>

@@ -1,0 +1,48 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/NabuNet.styles.css" asp-append-version="true" />
+</head>
+
+<body>
+    <header>
+        <nav>
+            <a href="/">NabuNet</a>
+            <ul>
+                <li>
+                    <a href="/">Home</a>
+                </li>
+                <li>
+                    <a href="/Servers">Servers</a>
+                </li>
+                @if (ViewBag.ShowAdmin)
+                {
+                    <li>
+                        <a href="/Admin">Admin</a>
+                    </li>
+                }
+            </ul>
+            <!-- dropdown inline login form w. user/password? Register link? -->
+            <partial name="_LoginPartial" />
+        </nav>
+    </header>
+    <main role="main">
+        @RenderBody()
+    </main>
+
+    <footer>
+        &copy; 2023 by Atkelar - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a> - <a asp-area=""
+            asp-controller="Home" asp-action="Terms">Terms of Service</a> - <a asp-area="" asp-controller="Home"
+            asp-action="About">About</a>
+    </footer>
+    <script src="~/js/jquery.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+
+</html>

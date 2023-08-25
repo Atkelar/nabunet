@@ -1,0 +1,29 @@
+FROM --platform=amd64 scratch
+LABEL os="Linux"
+LABEL product="NabuNet Server"
+
+ADD rootfs.tar.gz /
+
+RUN apk add --no-cache ca-certificates tzdata
+RUN update-ca-certificates
+RUN cp /usr/share/zoneinfo/Europe/Vienna /etc/localtime
+RUN echo "Europe/Vienna" > /etc/timezone
+RUN apk del tzdata --purge
+RUN apk add --no-cache \ 
+    openssh libunwind \
+    nghttp2-libs libidn krb5-libs libuuid lttng-ust zlib \
+    libstdc++ libintl \
+    icu icu-data-full
+
+EXPOSE 5000
+ENV ASPNETCORE_URLS http://+:5000/
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
+ENV PATH=${PATH}:/nabunet
+
+
+COPY tmp /nabunet
+WORKDIR /nabunet
+
+ENTRYPOINT [ "./NabuNet" ]
+#ENTRYPOINT [ "ls", "-l" ]
+

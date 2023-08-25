@@ -1,0 +1,13 @@
+<ul class="tabs">
+    <li nav-active='@ViewBag.Page == "basic"'>
+        <a asp-action="index" asp-controller="profile" asp-route-id="">Basic
+            info</a>
+    </li>
+    <li nav-active='@ViewBag.Page == "security"'>
+        <a asp-action="index" asp-controller="profile" asp-route-id="security">Security</a>
+    </li>
+    <li nav-active='@ViewBag.Page == "tokens"'>
+        <a asp-action="index" asp-controller="profile" asp-route-id="tokens">API
+            Tokens</a>
+    </li>
+</ul>

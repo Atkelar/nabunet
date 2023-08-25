@@ -1,0 +1,29 @@
+@model ImprintDto
+@{
+    ViewData["Title"] = "Modify Site Imprint";
+}
+
+<h3>Update/set imprint</h3>
+<form asp-action="imprint" asp-controller="admin" method="POST">
+    <div class="inputfield-row">
+        <label asp-for="Title"></label> <input type="text" asp-for="Title"><span class="validation-error"
+            asp-validation-for="Title"></span><br />
+        <small>The imprint title will be shown as headline for the imprint section. Use "Imprint" if nothing else comes
+            to mind.</small>
+    </div>
+    <div class="inputfield-row">
+        <label asp-for="Article"></label> <textarea cols="40" rows="10" asp-for="Article"></textarea> <span
+            class="validation-error" asp-validation-for="Title"></span><br />
+        <small>The article (markdown!) will be shown as content block for the imprint section.</small>
+    </div>
+    <div class="inputfield-row">
+        <button type="submit">Set Imprint</button>
+    </div>
+</form>
+<h3>Remove imprint</h3>
+<form asp-action="removeimprint" asp-controller="admin" method="POST">
+    <div class="inputfield-row">
+        <small>WARNING: This will remove the imprint info from the system!</small><br />
+        <button type="submit">Clear Imprint</button>
+    </div>
+</form>

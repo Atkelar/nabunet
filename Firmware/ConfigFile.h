@@ -90,6 +90,7 @@ class NabuNetConfig
     bool wifi_valid();
 
     bool ignore_tls_errors();
+    void set_ignore_tls_errors(bool newValue);
 
     // try to read the EEPROM content and see if we have any old data. 
     // Initialize WiFi and other parameters accordingly if we haven't.

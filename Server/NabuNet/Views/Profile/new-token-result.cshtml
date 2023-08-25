@@ -1,0 +1,54 @@
+@model CreatedTokenInfoDto
+
+<h3>New Token</h3>
+<div class="info">@Model.Secret</div>
+<span>COPY BUTTON HERE</span>
+<p>
+    The token @if (string.IsNullOrWhiteSpace(Model.Name)) { <span>no name</span> } else { <span>@Model.Name</span> } 
+    @if(Model.ExpiresAt.HasValue) {
+        <text> expires @Model.ExpiresAt</text>
+    }
+    else
+    {
+        <text> does not expire</text>
+    }
+    and is granted 
+    @if (!Model.AnySpecials)
+    {
+        <text>no special permission.</text>
+    }
+    else
+    {
+        <text>the following special permissions:</text>
+    }
+</p>
+@if (Model.AnySpecials)
+{
+<ul>
+    @if (Model.IsSiteAdmin)
+    {
+        <li>Site Admin</li>
+    }
+    @if (Model.IsModerator)
+    {
+        <li>Moderator</li>
+    }
+    @if (Model.IsUserAdmin)
+    {
+        <li>User Admin</li>
+    }
+    @if (Model.IsContentManager)
+    {
+        <li>Content Manager</li>
+    }
+</ul>
+}
+<p>Be sure to keep the token secret! Anybody who has this token can use it to access the site's API in your name! If
+    you are not sure if the token has been compromised, disable the API Access in your account and/or delete the token
+    and create a new one!
+</p>
+<p>
+    <a nav-active='@ViewBag.Page == "tokens"' asp-action="index" asp-controller="profile" asp-route-id="tokens">back to
+        your
+        tokens...</a>
+</p>

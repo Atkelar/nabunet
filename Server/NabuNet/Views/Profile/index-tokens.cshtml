@@ -1,0 +1,107 @@
+@model TokenListDto
+@{
+    ViewBag.page = "tokens";
+}
+
+<partial name="_NavTabsPartial"></partial>
+<p>
+    API Tokens allow access to the system via the REST api, e.g. using the PowerShell module or other 3rd party software. This can be useful for deployement scripts and similar utilities.
+</p>
+        <h3>Current tokens</h3>
+        @if (Model.Tokens == null || !Model.Tokens.Any())
+        {
+            <em>...none.</em>
+        }
+        else
+        {
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Issued</th>
+                    <th>Expires</th>
+                    <th>Flags</th>
+                    <th></th>
+                </tr>
+                @foreach (var item in Model.Tokens)
+                {
+                    <tr>
+                        <td>@item.Name</td>
+                        <td>@item.IssuedAt</td><!-- todo server time-->
+                        <td>@item.ExpiresAt</td><!-- todo server time-->
+                        <td>
+                            @if (item.IsSiteAdmin)
+                            {
+                                <span>Site Admin</span>
+                            }
+                            @if (item.IsModerator)
+                            {
+                                <span>Moderator</span>
+                            }
+                            @if (item.IsUserAdmin)
+                            {
+                                <span>User Admin</span>
+                            }
+                            @if (item.IsContentManager)
+                            {
+                                <span>Content Manager</span>
+                            }
+                        </td>
+                        <td>
+                            <a asp-action="deletetoken" asp-controller="profile" asp-route-id="@item.Id">delete...</a>
+                        </td>
+                    </tr>
+                }
+            </table>
+        }
+
+        <h3>Create new token</h3>
+        <form asp-action="createtoken" asp-controller="profile">
+    <div class="inputfield-row">
+            <label for="Name">Name (optional)</label><input type="text" maxlength="32" name="Name" />
+                </div>
+    <div class="inputfield-row">
+
+            <label for="Expires">Expires at (UTC, optional)</label><input type="datetime" name="Expires" />
+                </div>
+            @if (Model.CanMakeSiteAdmin)
+            {
+                <div class="inputfield-row">
+                <label for="MakeSiteAdmin">Enable Site Admin</label>
+
+                <input value="true" type="checkbox" name="MakeSiteAdmin"
+                    id="MakeSiteAdmin" />
+                </div>
+            }
+            @if (Model.CanMakeModerator)
+            {
+                <div class="inputfield-row">
+                <label for="MakeModerator">Enable Moderator</label>
+
+                <input value="true" type="checkbox" name="MakeModerator"
+                    id="MakeModerator" />
+                </div>
+            }
+            @if (Model.CanMakeContentManager)
+            {
+                <div class="inputfield-row">
+                <label for="MakeContentManager">Enable Content Manager</label>
+
+                <input value="true" type="checkbox"
+                    name="MakeContentManager" id="MakeContentManager" />
+                </div>
+            }
+            @if (Model.CanMakeUserAdmin)
+            {
+                <div class="inputfield-row">
+                <label for="MakeUserAdmin">Enable User Admin</label>
+
+                <input value="true" type="checkbox" name="MakeUserAdmin"
+                    id="MakeUserAdmin" />
+                </div>
+            }
+                <div class="inputfield-row">
+            <button type="submit">Create...</button><br/>
+            <small>Note: the token will be created and issued right now, the resulting token value will never becoma
+                visible again! Be sure to copy and keep it safe right away!</small>
+                </div>
+        </form>

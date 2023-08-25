@@ -1,0 +1,59 @@
+@model BasicProfileInfo
+@{
+    ViewBag.page = "basic";
+}
+
+<partial name="_NavTabsPartial"></partial>
+
+<form asp-action="updatebasic">
+    <div class="inputfield-row">
+    <label asp-for="DisplayName"></label> <input type="text" asp-for="DisplayName" /> <span
+        asp-validation-for="DisplayName"></span><br/>
+    <small>The display name is used for longer, free form display of user names. It is still limited to 32 characters as
+        it
+        might end up on the Nabu in certain situations, but you can use any unicode character here; Just be aware that
+        Nabu doesn't
+        do unicode and all characters outside the ASCII range will become "?" on the Nabu!
+    </small>
+    </div>
+    <div class="inputfield-row">
+    <label asp-for="HighScoreName"></label><input type="text" asp-for="HighScoreName" /> <span
+        asp-validation-for="HighScoreName"></span>
+        <br/>
+    <small>The High Score Name is a preset feature to pre-fill your "3-character name" for NabuNet games that offer
+        saved
+        highscore lists. Yes, we could use longer ones on the website, but the 8-bit fun is 3-letter-names in
+        highscores!</small><br/>
+    </div>
+    <div class="inputfield-row">
+    <label asp-for="AllowDeviceAccess"></label> <input asp-for="AllowDeviceAccess" /><br/><small>You have to enable this setting before you can connect your NabuNet modem to this account. This is
+        useful to "put the account into hibernation" without digging through all your connected devices and
+        also later resurrect it without reconnecting everything manually.</small>
+    </div>
+    <div class="inputfield-row">
+    <label asp-for="AllowAPIAccess"></label> <input asp-for="AllowAPIAccess" /> <br/>
+    <small>The NabuNet server provides most features via a REST API too! If you are into automation, you can issue
+        and manage access tokens for your account on the tokens page. This switch enables or disables API level access
+        globally, so you have an emergency brake without deleting any tokens!</small>
+    </div>
+    <div class="inputfield-row">
+    <label asp-for="EMailAddress"></label> <input type="text" asp-for="EMailAddress" /> <span
+        asp-validation-for="EMailAddress"></span><br/>
+    <small>
+        Your e-mail address is not shown in public. Only user and site administrators will see it. Note that
+        the server might require the e-mail addresses to be validated before they are used. So: if you change it here,
+        you might be sent
+        a validaton key to confirm the new address, while the old one also gets a notification about the change.
+        Only after successfully confirming the new address it will show up here and be used for communication!
+    </small>
+    </div>
+    <div class="inputfield-row">
+    <button type="submit">Update...</button>
+    <div asp-validation-summary="All"></div>
+    </div>
+</form>
+
+@section Scripts
+    {
+    <partial name="_ValidationScriptsPartial" />
+}

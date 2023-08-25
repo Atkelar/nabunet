@@ -16,12 +16,17 @@ void modem_panic(int code);
 // will blink the requested LED for "number" times; Can be used as a status indicator.
 void blink_status_confirmed(int ledPin, int number);
 
+// TODO: notify status info during regular operations...
+// if "wait" is false, we will put this into a queue for the main modem loop to handle...
+//void blink_status_confirmed(int ledPin, int number, bool wait);
+
 unsigned char translate_wifi_status(int status);
 unsigned char translate_wifi_encryption(unsigned char type);
 unsigned char translate_wifi_signal_strength(int dbm);
 
 // shared IO buffer for various functions; should be no problem as each of them is only ever active alone...
 // this saves RAM and causes less fragmentation
+// TODO: the project has grown beyond that idea, so context specific buffers are needed to avoid overlaps!
 #define BUFFER_SIZE 4096
 extern unsigned char shared_buffer[];
 

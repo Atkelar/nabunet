@@ -1,0 +1,36 @@
+@model ArticleInputDto
+@{
+    ViewData["Title"] = "Status Update";
+}
+<h3>Set server status message</h3>
+    <form asp-action="status" asp-controller="admin" method="POST">
+    <div class="inputfield-row">
+        <label asp-for="Title"></label> <input type="text" asp-for="Title"><span class="badge text-bg-danger"
+            asp-validation-for="Title"></span><br/>
+    <small>The status title will be shown on the homepage and in the RSS feed.</small>
+    </div>
+    <div class="inputfield-row">
+        <label asp-for="Article"></label><textarea cols="40" rows="10" asp-for="Article"></textarea> <span class="badge text-bg-danger"
+            asp-validation-for="Title"></span><br/>
+    <small>The article (markdown!) will be shown in the details page, linked from the start page or the RSS feed.</small>
+    </div>
+    <div class="inputfield-row">
+        <label asp-for="ReferenceDate"></label>
+        <input type="datetime" asp-for="ReferenceDate"><span class="badge text-bg-danger"
+            asp-validation-for="ReferenceDate"></span><br/>
+    <small>The reference date is the date/time when the announced thing will/has happened. When provided, it will be shown as part of the homepage too.</small>
+    </div>
+    <div class="inputfield-row">
+        <button type="submit">Set Message</button>
+    </div>
+    </form>
+<h3>Clear server status message</h3>
+    <form asp-action="removestatus" asp-controller="admin" method="POST">
+        <button type="submit">Remove Message</button>
+    </form>
+
+
+@section Scripts
+    {
+    <partial name="_ValidationScriptsPartial" />
+}
