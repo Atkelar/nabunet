@@ -7,30 +7,6 @@ wifi_menu:
     ld hl,.screen_header
     call print
 
-    ld c, 8
-    ld b, 4
-    call goto_xy
-    ld hl, .Opt1
-    call print
-
-    ld c, 8
-    ld b, 5
-    call goto_xy
-    ld hl, .Opt2
-    call print
-
-    ld c, 8
-    ld b, 6
-    call goto_xy
-    ld hl, .Opt3
-    call print
-
-    ld c, 8
-    ld b, 7
-    call goto_xy
-    ld hl, .Opt4
-    call print
-
     call load_wifi_status
     jr z, .wifi_menu_status
 
@@ -43,50 +19,141 @@ wifi_menu:
 
 .wifi_menu_status:
 
-    ld c,3
-    ld b, 8
+    ld c, 3
+    ld b, 22
     call goto_xy
-    ld a, (modem_wifi_enabled)
-    call print_hex_8
-    ld a, (modem_wifi_ssid_set)
-    call print_hex_8
-    ld a, (modem_wifi_key_set)
-    call print_hex_8
-    ld a, (modem_wifi_status)
-    call print_hex_8
+    ld hl, .current_SSID_header
+    call print
+    ld hl, modem_wifi_current_ssid
+    ld a, (hl)
+    or a
+    jr nz, .ssid_set
+    ld hl, .no_ssid_ssid
+.ssid_set:
+    call print
+
     ld a, (modem_wifi_signal)
-    call print_hex_8
+    ld hl, .signal_0
+    cp 20
+    jr c, .print_current_signal
+    ld hl, .signal_1
+    cp 40
+    jr c, .print_current_signal
+    ld hl, .signal_2
+    cp 60
+    jr c, .print_current_signal
+    ld hl, .signal_3
+    cp 80
+    jr c, .print_current_signal
+    ld hl, .signal_4
+.print_current_signal:
+    call print
+
+    ld c, 3
+    ld b, 23
+    call goto_xy
+    ld hl, .localIP_header
+    call print
+    ld hl, modem_wifi_current_ip
+    ld a, (hl)
+    or a
+    jr nz, .ip_set
+    ld hl, .no_ip_ip
+.ip_set:
+    call print
+
+
+
+
 
 .wifi_menu_loop:        ; TODO: better (centralized?) menu handling...
     call .update_status
-    call get_key
 
-    cp 031h ; "1"
-    call z, .prompt_enable_wifi
 
-    cp 032h ; "2"
-    call z, .set_ssid_manually
+    ld hl, .menu_items
+    ld a, 1
+    ld c, 8
+    ld b, 4
+    call screen_menu_run
+    ret z
+    ld hl, .menu_items
+    call screen_menu_call
 
-    cp 033h ; "2"
-    call z, .scan_ssids
-
-    cp 01bh ;  ESC
-    jr z, .exit_menu
+    call .clear_menu
 
     jp .wifi_menu_loop
 
 
-.exit_menu:
-    ld b, 1
+.update_status:
+
     ret
 
-.update_status:
+.set_key:
+    ld b, 10
+    ld c, 3
+    call goto_xy
+    ld hl, .key_prompt
+    call print
+
+    ld hl, config_proposed_string ; reuse buffer...
+    xor a
+    ld (hl),a  ; we *always* start off clean, to avoid any pollution...
+    ld d, 32
+    ld e, 20
+    ld b, 10
+    ld c, 18 | 080h ; request "*"
+    call readline
+    jr z, .set_key_clear_buffer
+
+    ld hl, config_proposed_string
+    call config_set_key    ; TODO error handling
+
+.set_key_clear_buffer:
+    ld hl, config_proposed_string
+    xor a
+    ld (hl),a   ; clear out (well, not quite but almost) the password. TODO: clear full buffer.
+    
     ret
+
 
 .prompt_enable_wifi:
+    ld hl, .enable_wifi_prompt
+    ld a,1  ; we allow cancel...
+    call prompt_yes_no
+    cp 2
+    ret z   ; leave "as is" when cancelled.
+    cp 1
+    jr z, .disable_wifi_now
+    ld a, 1
+    call config_set_wifi_enabled    ; TODO handle errors
+    ret
+.disable_wifi_now:
+    ld a, 0
+    call config_set_wifi_enabled    ; TODO handle errors
     ret
 
 .set_ssid_manually:
+    ld de, config_proposed_string
+    ld hl, modem_wifi_current_ssid
+    call strcpy
+
+    ld b, 10
+    ld c, 3
+    call goto_xy
+    ld hl, .ssid_prompt
+    call print
+
+    ld hl, config_proposed_string
+    ld d, 32
+    ld e, 20
+    ld b, 10
+    ld c, 18
+    call readline
+    ret z
+
+    ld hl, config_proposed_string
+    call config_set_ssid    ; TODO error handling
+
     ret
 
 .scan_ssids:
@@ -129,7 +196,7 @@ wifi_menu:
     add hl, de
     call print
 
-    ld a, 15
+    ld a, 10
     call delay_frames
 
     call key_available
@@ -260,6 +327,7 @@ wifi_menu:
 
 .handle_modem_error:
     ; TODO: show error code info...
+    call main_print_modem_error_state
     ret
 
 .clear_menu:
@@ -276,14 +344,30 @@ wifi_menu:
     jr nz, .clear_loop
     ret
 
+.menu_items:
+    defb "1", 0
+    defw .Opt1
+    defw .prompt_enable_wifi
+    defb "2", 0
+    defw .Opt2
+    defw .set_ssid_manually
+    defb "3", 0
+    defw .Opt3
+    defw .scan_ssids
+    defb "4", 0
+    defw .Opt4
+    defw .set_key
+
+    defb 0
+
 .Opt1:
-defb "1: Enabled",0
+defb "Enable/Disable",0
 .Opt2:
-defb "2: Set SSID",0
+defb "Set SSID",0
 .Opt3:
-defb "3: Scan/select SSID",0
+defb "Scan & select SSID",0
 .Opt4:
-defb "4: Set Key",0
+defb "Set key",0
 
 .query_error:
 defb "Status read failed!",0 
@@ -297,12 +381,31 @@ defb "scanning...",0
 .no_networks_found:
 defb "No networks found!", 0
 
+.ssid_prompt:
+defb "SSID:",0
+
+.enable_wifi_prompt:
+defb "Enable WiFi?",0
+
+.localIP_header: 
+defb "IP:   ",0
+.no_ip_ip:
+defb "< not con. >", 0 
+
+.current_SSID_header:
+defb "SSID: ",0
+.no_ssid_ssid:
+defb "< not set >",0
+
+.key_prompt:
+defb "Key/password:", 0
+
 .animation_location:
 defb 0
 .current_item:
 defb 0
 
-.scanning_animation:    ; must be 2-bytes each, four animation characters wiht zero termination...
+.scanning_animation:    ; must be 2-bytes each, four animation characters with zero termination...
 defb 0e7h, 0
 defb 0e8h, 0
 defb 0e9h, 0

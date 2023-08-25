@@ -249,3 +249,116 @@ modem_wait_for_reply:
 
     xor a
     ret
+
+
+; returns a string in HL with the current error/status message
+modem_get_state_message:
+    ld a, (HCCA_STATUS)
+    cp 4
+    jr c, .state_ok
+    xor a ; assume unknown
+.state_ok:
+    sla a
+    ld e, A
+    ld d,0
+    ld hl, .hcca_state_string_table
+    add hl, de
+    ld a, (hl)
+    inc hl
+    ld d, a
+    ld a, (hl)
+    ld h, a
+    ld l, d
+    ret
+
+; returns a string in HL with the current error/status message
+modem_get_tx_error_message:
+    ld a, (HCCA_TX_STATUS)
+    cp HCCA_XFSTATUS_ERROR
+    jr z, .tx_state_ok
+    ld hl, .hcca_error_error_none
+    ret
+
+.tx_state_ok:
+    ld a, (HCCA_TX_ERROR)
+    cp 5
+    jr c, .tx_state_not_over
+    ld hl, .hcca_error_error_unknown
+    ret
+.tx_state_not_over:
+    sla a
+    ld e, a
+    ld d,0
+    ld hl, .hcca_xf_error_string_table
+    add hl, de
+    ld a, (hl)
+    inc hl
+    ld d, a
+    ld a, (hl)
+    ld h, a
+    ld l, d
+    ret
+
+; returns a string in HL with the current error/status message
+modem_get_rx_error_message:
+    ld a, (HCCA_RX_STATUS)
+    cp HCCA_XFSTATUS_ERROR
+    jr z, .rx_state_ok
+    ld hl, .hcca_error_error_none
+    ret
+
+.rx_state_ok:
+    ld a, (HCCA_RX_ERROR)
+    cp 5
+    jr c, .rx_state_not_over
+    ld hl, .hcca_error_error_unknown
+    ret
+.rx_state_not_over:
+    sla a
+    ld e, a
+    ld d,0
+    ld hl, .hcca_xf_error_string_table
+    add hl, de
+    ld a, (hl)
+    inc hl
+    ld d, a
+    ld a, (hl)
+    ld h, a
+    ld l, d
+    ret
+
+.hcca_state_string_table:
+    dw .hcca_state_unknown
+    dw .hcca_state_connecting
+    dw .hcca_state_connected
+    dw .hcca_state_error
+
+.hcca_xf_error_string_table:
+    dw .hcca_error_error_none
+    dw .hcca_error_error_timeout
+    dw .hcca_error_error_protocol
+    dw .hcca_error_error_conlost
+    dw .hcca_error_error_checksum
+
+.hcca_state_unknown:
+    defb "unknown",0
+.hcca_state_connecting:
+    defb "connecting",0
+.hcca_state_connected:
+    defb "connected",0
+.hcca_state_error:
+    defb "error",0
+
+.hcca_error_error_none:
+    defb "none", 0
+.hcca_error_error_timeout:
+    defb "timeout", 0
+.hcca_error_error_protocol:
+    defb "protocol error", 0
+.hcca_error_error_conlost:
+    defb "connection lost", 0
+.hcca_error_error_checksum:
+    defb "checksum error", 0
+
+.hcca_error_error_unknown:
+    defb "unkown error", 0

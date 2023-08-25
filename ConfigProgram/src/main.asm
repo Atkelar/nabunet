@@ -34,6 +34,9 @@ program_entry_point:
     ld hl, .please_wait
     call print
 
+    ld a, 60    
+    call delay_frames   ; delay slightly to show the main tech revision number...
+
 .modem_init_retry:
 
     call modem_initialize
@@ -45,7 +48,9 @@ program_entry_point:
     ld hl, .connect_failed
     call print
 
-    call .print_modem_diaginfo
+    call main_print_modem_error_state
+
+    ;call .print_modem_diaginfo
 
     ld a, 60
     call delay_frames
@@ -65,10 +70,10 @@ program_entry_point:
     call print
     call clear_eol
 
-    call reload_current_config
+    call reload_modem_info
     jr z, .config_loaded
 
-    call .print_modem_diaginfo
+    ;call .print_modem_diaginfo
 
     ld hl, .connect_failed
     call print
@@ -79,34 +84,55 @@ program_entry_point:
     jp main_menu
     ; will not return... might reboot, but not return.
 
-.print_modem_diaginfo:
-    ld a, (HCCA_STATUS)
-    call print_hex_8
-    ld a, (HCCA_RX_ERROR)
-    call print_hex_8
-    ld a, (HCCA_TX_STATUS)
-    call print_hex_8
-    ld a, (HCCA_TX_ERROR)
-    call print_hex_8
 
-    ld a, (HCCA_TX_BUFFER)
-    call print_hex_8
-    ld a, (HCCA_TX_BUFFER+1)
-    call print_hex_8
-    ld a, (HCCA_TX_BUFFER+2)
-    call print_hex_8
-    ld a, (HCCA_TX_BUFFER+3)
-    call print_hex_8
-
-    ld a, (HCCA_RX_LL_STATE)
-    call print_hex_8
-    ld a, (HCCA_RX_LL_CODE)
-    call print_hex_8
-    ld a, (HCCA_RX_LL_LENGTH)
-    call print_hex_8
-    ld a, (HCCA_RX_LL_CHECKSUM)
-    call print_hex_8
+main_print_modem_error_state:
+    ld b, 23
+    ld c, 1
+    call goto_xy
+    call clear_eol
+    ld hl, .modem_error_header_1
+    call print
+    call modem_get_state_message
+    call print
+    ld hl, .modem_error_header_2
+    call print
+    call modem_get_tx_error_message
+    call print
+    ld hl, .modem_error_header_3
+    call print
+    call modem_get_rx_error_message
+    call print
     ret
+
+;; diagnostics output during connection failed events...
+; .print_modem_diaginfo:
+;     ld a, (HCCA_STATUS)
+;     call print_hex_8
+;     ld a, (HCCA_RX_ERROR)
+;     call print_hex_8
+;     ld a, (HCCA_TX_STATUS)
+;     call print_hex_8
+;     ld a, (HCCA_TX_ERROR)
+;     call print_hex_8
+
+;     ld a, (HCCA_TX_BUFFER)
+;     call print_hex_8
+;     ld a, (HCCA_TX_BUFFER+1)
+;     call print_hex_8
+;     ld a, (HCCA_TX_BUFFER+2)
+;     call print_hex_8
+;     ld a, (HCCA_TX_BUFFER+3)
+;     call print_hex_8
+
+;     ld a, (HCCA_RX_LL_STATE)
+;     call print_hex_8
+;     ld a, (HCCA_RX_LL_CODE)
+;     call print_hex_8
+;     ld a, (HCCA_RX_LL_LENGTH)
+;     call print_hex_8
+;     ld a, (HCCA_RX_LL_CHECKSUM)
+;     call print_hex_8
+;     ret
 
 ; include system code
 
@@ -115,6 +141,7 @@ include "screen.asm"
 include "system.asm"
 include "keyboard.asm"
 include "modem.asm"
+include "strings.asm"
 
 include "menu.asm"
 include "utility.asm"
@@ -124,6 +151,8 @@ include "ui.asm"
 
 include "main_menu.asm"
 include "wifi_menu.asm"
+include "remote_menu.asm"
+include "diagnostics_menu.asm"
 include "config_functions.asm"
 
 ;  Character set for config app is 0x20-0xff
@@ -155,6 +184,13 @@ incbin "Assets/config_charset.bin"
 ; dbg_mark:
 ; defb "0X"
 
+.modem_error_header_1:
+    defb "MDM: ",0
+.modem_error_header_2:
+    defb " TX: ",0
+.modem_error_header_3:
+    defb " RX: ",0
+
 .splash_header:
     defb "NABUNET Modem Config, ", 0
 
@@ -168,9 +204,6 @@ incbin "Assets/config_charset.bin"
 
 .retrying:
     defb "retrying...",0
-
-image_version_string:
-    defb "1.0.0.0 BETA",0
 
 modem_config_var_start:
 modem_mac_formatted:
@@ -189,7 +222,35 @@ modem_wifi_status:
 modem_wifi_signal:
     defb 0
 
+modem_wifi_current_ssid:
+    defs 33
+config_proposed_string:
+    defs 33
+modem_wifi_current_ip:
+    defs 16 ; IP4 only, sorry. 3*4+3+ zero.
+
+modem_remote_current_host:
+    defs 121
+modem_remote_current_path:
+    defs 33
+modem_remote_current_port:
+    defs 6  ; 5+0 
+modem_remote_ignore_tls:
+    defb 0
+modem_remote_flags:
+    defb 0
+modem_remote_api_level:
+    defb 0
+modem_remote_enabled:
+    defb 0
+modem_remote_server_name:
+    defs 33
+modem_remote_server_version:
+    defs 33
+
+    
 menu_temp_vars:
     defs 256
 
-
+image_version_string:
+    defb "1.0.0.1 BETA",0

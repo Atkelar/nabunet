@@ -74,12 +74,17 @@ SLOT_2_CALLBACK:        equ SLOT_1_CALLBACK + 2
 SLOT_3_CALLBACK:        equ SLOT_2_CALLBACK + 2
 
 
-UI_BUFFER:              equ SLOT_3_CALLBACK + 2     ; used for - e.g. the readline function.
+SCREEN_SCROLL_BUFFER:   equ SLOT_3_CALLBACK + 2 ; 40 chars buffer for a line of screen data to scroll around.
+SCREEN_SCROLL_TARGET:   equ SCREEN_SCROLL_BUFFER + 40
+SCREEN_SCROLL_SOURCE:   equ SCREEN_SCROLL_TARGET + 2
+SCREEN_SCROLL_COUNT:    equ SCREEN_SCROLL_SOURCE + 2
+SCREEN_SCROLL_FILL:     equ SCREEN_SCROLL_COUNT + 1
+UI_BUFFER:              equ SCREEN_SCROLL_FILL + 1     ; used for - e.g. the readline function.
 UI_BUFFER_LENGTH:       equ 132
 UI_VARIABLES_BASE:      equ UI_BUFFER + UI_BUFFER_LENGTH
-UI_END:                 equ UI_VARIABLES_BASE + 10  ; 10 bytes should do the trick for now...
+OS_VARIABLES_LENGTH:    equ 10h ; 16 bytes should do the trick for now...
+UI_END:                 equ (UI_VARIABLES_BASE + OS_VARIABLES_LENGTH)-1  
 
-OS_VARIABLE_LENGTH:     equ (UI_END - OS_VARIABLE_BASE)+1
 
 ; Keyboard "on/off" markers... These have to match the "number/index" 
 ; of the received key codes.
@@ -158,6 +163,7 @@ HCCA_XFSTATUS_RUNNING:   equ 1  ; running transfer
 HCCA_XFSTATUS_ERROR:     equ 2  ; error for some reason
 
 HCCA_ERROR_HWFLAGS:      equ STATUS_HCCA_OVERRUN | STATUS_HCCA_FRAMING
+HCCA_ERROR_NONE:         equ 0
 HCCA_ERROR_TIMEOUT:      equ 1  ; timeout during send/receive.
 HCCA_ERROR_PROTOCOL:     equ 2  ; protocol sequence error; unexpected "package"
 HCCA_ERROR_CONLOST:      equ 3  ; connection lost; received resync request
@@ -180,3 +186,9 @@ HCCA_LLSTATE_IDLE:          equ 0
 HCCA_LLSTATE_EXPECTLEN:     equ 1
 HCCA_LLSTATE_DATA:          equ 2
 HCCA_LLSTATE_CHECKSUM:      equ 3
+
+
+HCCA_SERVER_FLAG_GUEST:     equ  1
+HCCA_SERVER_FLAG_LOGIN:     equ  2
+HCCA_SERVER_FLAG_READONLY:  equ  4
+HCCA_SERVER_FLAG_VIRTUAL:   equ  8

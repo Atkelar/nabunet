@@ -93,3 +93,5 @@ KBD_CODE_U_YES:         equ 0F7h
 KBD_CODE_U_SYM:         equ 0F8h
 KBD_CODE_U_PAUSE:       equ 0F9h
 KBD_CODE_U_TV:          equ 0FAh
+
+

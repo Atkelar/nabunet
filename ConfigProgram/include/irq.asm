@@ -19,7 +19,7 @@ setup_interrupts:
     ; initialize OS variables...
 	ld hl,OS_VARIABLE_BASE
 	ld de,OS_VARIABLE_BASE + 1
-	ld bc,OS_VARIABLE_LENGTH - 1
+	ld bc,OS_VARIABLES_LENGTH - 1
 	xor a
 	ld (hl),a			    ;   reset first byte to zero before copy, thus copying 0s...
 	ldir
@@ -83,9 +83,9 @@ disable_interrupt_mask:
     push de
     push hl
 
-    ld a, CONTROL_LED_ALERT
-    ld b, 2
-    call set_led
+    ; ld a, CONTROL_LED_ALERT
+    ; ld b, 2
+    ; call set_led
 
     in a,(IO_KBD_STATUS)     ;   read status byte...   initial interrupt will show "overrun" because boot took too long;
     and KBD_STATUS_OVERRUN
@@ -326,9 +326,9 @@ set_slot_irq_enabled:
     ; maybe do something else?
     ; store "collision" flag...
 
-    ; TODO:
     ; blink cursor... on/off matches bit 0x20 -> should be 32 frames; at 60fps that should 
     ; be just about 0.5s and a good blink rate with almost no effort.
+    ; NOTE: if the cursor is not set as "VISIBLE", DO NOT TOUCH THE VDP registers! 
 
     ld a, (CURSOR_FLAGS)
     and CURSOR_FLAG_VISIBLE
@@ -432,9 +432,9 @@ set_slot_irq_enabled:
 .rollover1:
     ld (VDP_TIMER), a
 
-    ld a, CONTROL_LED_PAUSE
-    ld b, 2
-    call set_led
+    ; ld a, CONTROL_LED_PAUSE
+    ; ld b, 2
+    ; call set_led
 
     ld a, (VDP_TIMER+1)
     inc a

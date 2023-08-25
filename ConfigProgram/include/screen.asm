@@ -84,13 +84,21 @@ set_cursor_style:
     and 077h    ;  both values max out at 3-bits.
 
     ld b, a
+    and 070h
+    ld c, a
+    ld a, b
     and 7
     sla a
+    or c
+    ld b, a
+    di
+    ld a, (CURSOR_FLAGS)
+    and CURSOR_FLAG_BLINKON ; | CURSOR_FLAG_VISIBLE visible flag should certainly be off here...
     or b
     ld (CURSOR_FLAGS), a
     xor a
     ld (CURSOR_ORIGINAL_CHAR), a    ; make sure we re-compute the current bitmap on next "enable"
-
+    ei
     
     call .enable_cursor_for_screen_proc
     ret
@@ -364,7 +372,7 @@ clear_screen:
     ret
 
 ; input: HL = address of string, 0-terminated.
-; handles "cr" (0x0A) as CR/LF and does scrolling if needed.
+; handles "newline" (0x0A) as CR/LF and does scrolling if needed.
 ; keeps track of cursor X/Y...
 print:
     ld a, (SCREEN_MODE)
@@ -374,6 +382,8 @@ print:
     push hl
     call .disable_cursor_for_screen_proc
     pop hl
+
+    di  ; we might be thrown off by IRQ code...
 
     ; initialize starting address in VDP...
 
@@ -428,7 +438,20 @@ print:
     cp e
     jr nz, .no_scroll
 
-    ; TODO: call "scroll screen up one..."
+    ; slightly complicated; we need to save our state...
+    ; ...but the VDP write address is re-computed for the linefeed condition 
+    ; downstairs anyaway, so we don't care if it gets hosed in the scroll code.
+    push hl
+    push af
+    push de
+    push bc
+    ld a, 1
+    ld b, 020h
+    call .scroll_up
+    pop bc
+    pop de
+    pop af
+    pop hl
 
     dec a   ; stay at bottom line...
 .no_scroll:
@@ -462,7 +485,124 @@ print:
     ld a, b
     ld (CURSOR_POSITION_Y), a
 
+    ei  ; we might be thrown off by IRQ code... enable interrupts again...
+
     call .enable_cursor_for_screen_proc
+    ret
+
+; Scroll the screen buffer UP (move lines from below to top)
+; input: a => line count to scroll by...
+;        b => character code to fill in for new line(s)
+.scroll_up:
+    or a
+    ret z   ; nothign to do...
+    ld c, a
+    ld a, (SCREEN_MODE)
+    cp SCREEN_MODE_MCOL
+    ret z   ; not supported..
+    ld a, b
+    ld (SCREEN_SCROLL_FILL), a
+    ld a, c
+    ld hl, SCREEN_HEIGHT
+    cp (hl)
+    jr c, .scroll_up_ok
+    ret
+.scroll_up_ok:
+    ld a, (hl)
+    sub c
+    ld (SCREEN_SCROLL_COUNT), a
+    ; source offset...
+    push bc
+    ld b, c
+    ld c, 0
+    ; input b = y, c = x
+    call .calculate_screen_offset
+    ; hl = source
+    ld de, VDP_SCREEN_BASE
+    add hl, de
+    ld (SCREEN_SCROLL_SOURCE), hl
+    ld hl, VDP_SCREEN_BASE
+    ld (SCREEN_SCROLL_TARGET), hl
+
+.scroll_up_loop:
+    ; repeat until "count" is zero
+    ld a, (SCREEN_SCROLL_COUNT)
+    or a
+    jr z, .scroll_up_fill_now
+    dec a
+    ld (SCREEN_SCROLL_COUNT), a
+
+    ; read line from source,...
+    ld hl,(SCREEN_SCROLL_SOURCE)
+    ld a, l
+    out (IO_VDP_CONTROL), a
+    ld a, h
+    and 3Fh     ; mask top bits
+    out (IO_VDP_CONTROL), a
+
+    ld a, (SCREEN_WIDTH)
+    ld b, a
+    ld c, IO_VDP_DATA
+    ld hl, SCREEN_SCROLL_BUFFER
+
+    inir    ; load the x-dim bytes...
+    ; ...write line to target...
+
+    ld hl, (SCREEN_SCROLL_TARGET)
+    ld a, l
+    out (IO_VDP_CONTROL), a
+    ld a, h
+    and 3Fh     ; mask top bits
+    or 040h     ; set "address selection bit"
+    out (IO_VDP_CONTROL), a
+    ld c, IO_VDP_DATA
+    ld a, (SCREEN_WIDTH)
+    ld b, a
+    ld hl, SCREEN_SCROLL_BUFFER
+    otir
+    ; increment source, increment target
+    ld a, (SCREEN_WIDTH)
+    ld e, a
+    ld d, 0
+    ld hl, (SCREEN_SCROLL_SOURCE)
+    add hl, de
+    ld (SCREEN_SCROLL_SOURCE),hl
+    ld hl, (SCREEN_SCROLL_TARGET)
+    add hl, de
+    ld (SCREEN_SCROLL_TARGET),hl
+
+    jr .scroll_up_loop
+
+.scroll_up_fill_now:
+    ; target = must be the first "blank" line
+    ld hl, (SCREEN_SCROLL_TARGET)
+    ld a, l
+    out (IO_VDP_CONTROL), a
+    ld a, h
+    and 3Fh     ; mask top bits
+    or 040h     ; set "address selection bit"
+    out (IO_VDP_CONTROL), a
+    pop bc
+    ld a, c
+.scroll_up_fill_loop:
+    or a
+    ret z   ; done.
+    dec a
+    ld (SCREEN_SCROLL_COUNT), a ; fill "count" lines now...
+
+    ld c, IO_VDP_DATA
+    ld a, (SCREEN_WIDTH)
+    ld b, a
+    ld a, (SCREEN_SCROLL_FILL)
+.scroll_up_fill_line_loop:
+    out (IO_VDP_DATA), a
+    dec b
+    jr nz, .scroll_up_fill_line_loop
+    ld a, (SCREEN_SCROLL_COUNT)
+    jr .scroll_up_fill_loop
+    
+    ; fill end of screen with "filler" chars.
+    ;SCREEN_SCROLL_BUFFER
     ret
 
 ; input b = y, c = x

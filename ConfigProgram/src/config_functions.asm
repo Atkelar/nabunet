@@ -1,7 +1,7 @@
 
 
-
-reload_current_config:
+; Loads the current modem information; 
+reload_modem_info:
     ld de, UI_BUFFER
     xor a
     ld (de), a
@@ -91,24 +91,72 @@ load_config_loop_done1:
 
     ret
 
+load_remote_server_status:
+    ; reset...
+    xor a
 
-load_wifi_status:
-    ld b, 1
-    ld hl, UI_BUFFER
-    ld a, 1
-    ld (hl),a
-    ld a, HCCA_PROT_CODE_MODEMCONFIG
-    ld c, 0
-    call modem_sendpacket
-    ret nz  ;; TODO: RESET STATUS TO ERROR!
+    ld (modem_remote_server_name),a
+    ld (modem_remote_server_version),a
+    ld (modem_remote_api_level),a
+    ld (modem_remote_enabled),a
+    ld (modem_remote_flags),a
+    ld (modem_remote_ignore_tls),a 
 
-    ld hl, UI_BUFFER
-    ld b, UI_BUFFER_LENGTH
-    ld a, HCCA_PROT_CODE_MODEMCONFIG
-    call modem_wait_for_reply
+    ld b, 0
+    ld a, 0ah
+    ; no net payload...
+    call .config_send_request_and_wait_reply
     ret nz
 
-    ld hl, UI_BUFFER
+    ld hl, CONFIG_BUFFER
+    ld a, (hl)
+    inc hl
+    ld (modem_remote_enabled), a
+    ld a, (hl)
+    inc hl
+    ld (modem_remote_api_level),a
+    ld a, (hl)
+    inc hl
+    ld (modem_remote_flags),a
+    ld a, (hl)
+    inc hl
+    ld (modem_remote_ignore_tls), a
+
+
+    ld a, 4 ; Host String
+    ld de, modem_remote_current_host
+    call config_get_string
+    ret nz
+
+    ld a, 5 ; Path String
+    ld de, modem_remote_current_path
+    call config_get_string
+    ret nz
+
+    ld a, 6 ; Port String
+    ld de, modem_remote_current_port
+    call config_get_string
+    ret nz
+
+    ld a, 7
+    ld de, modem_remote_server_version
+    call config_get_string
+    ret nz
+    ld a, 8
+    ld de, modem_remote_server_name
+    call config_get_string
+    ret nz
+    ret
+
+
+load_wifi_status:
+    ld b, 0
+    ld a, 1
+    ; no net payload...
+    call .config_send_request_and_wait_reply
+    ret nz
+
+    ld hl, CONFIG_BUFFER
     ld a, (hl)
     inc hl
     ld (modem_wifi_enabled), a
@@ -125,8 +173,142 @@ load_wifi_status:
     inc hl
     ld (modem_wifi_signal),a
 
+    ld a, 1
+    ld de, modem_wifi_current_ssid
+    call config_get_string
+    ret nz
+
+    ld a, 3
+    ld de, modem_wifi_current_ip
+    call config_get_string
+    ret nz
+
+    xor a   ; make sure we get the Z flag
     ret
 
+; read configuration string through buffer.
+; input: a -> string #, de -> target address
+config_get_string:
+    push de
+    ld (CONFIG_BUFFER), a
+    ld a, 9 ; read config string
+    ld b, 1
+    call .config_send_request_and_wait_reply
+    jr nz, .string_get_fail_pop
+
+    ; now we should have a reply...
+    ld a, (CONFIG_BUFFER)
+    or a
+    jr nz, .string_get_fail_pop
+
+    pop de
+    ld a, (CONFIG_BUFFER+1)
+    or a
+    jr z, .config_string_empty
+    ld c, a
+    ld b, 0
+    ld hl, CONFIG_BUFFER+2
+    ldir
+    xor a
+.config_string_empty:
+    ld (de),a
+    ret
+.string_get_fail_pop:
+    pop de
+    ld a, 1
+    or a    ; force NZ
+    ret
+
+; input: a = 1 enable, a = 0 disable.
+; output NZ if error, a = return code from modem.
+config_set_wifi_enabled:  
+    ld hl, CONFIG_BUFFER
+    ld (hl), a
+    ld b, 1
+    ld a, 7
+    call .config_send_request_and_wait_reply
+    ret nz
+
+    xor a ; clear flag
+    ld a, (CONFIG_BUFFER)
+    ret
+
+
+; input: a = 1 enable, a = 0 disable.
+; output NZ if error, a = return code from modem.
+config_set_tls_ignore:
+    ld hl, CONFIG_BUFFER
+    ld (hl), a
+    ld b, 1
+    ld a, 0ch    ; tls ignore flag
+    call .config_send_request_and_wait_reply
+    ret nz
+
+    xor a ; clear flag
+    ld a, (CONFIG_BUFFER)
+    ret
+
+; input: a = 1 enable, a = 0 disable.
+; output NZ if error, a = return code from modem.
+config_set_remote_enabled:  
+    ld hl, CONFIG_BUFFER
+    ld (hl), a
+    ld b, 1
+    ld a, 11    ; set remote enabled
+    call .config_send_request_and_wait_reply
+    ret nz
+
+    xor a ; clear flag
+    ld a, (CONFIG_BUFFER)
+    ret
+
+; input:  hl -> string
+; output NZ if error, a = return code from modem.
+config_set_host: 
+    ld a, 4 ; set remote host
+    jr .config_set_string
+
+; input:  hl -> string
+; output NZ if error, a = return code from modem.
+config_set_path: 
+    ld a, 5 ; set remote path
+    jr .config_set_string
+
+; input:  hl -> string
+; output NZ if error, a = return code from modem.
+config_set_port: 
+    ld a, 6 ; set remote port
+    jr .config_set_string
+
+; input:  hl -> string
+; output NZ if error, a = return code from modem.
+config_set_key: 
+    ld a, 2 ; set key
+    jr .config_set_string
+
+; input:  hl -> string
+; output NZ if error, a = return code from modem.
+config_set_ssid:
+    ld a, 1 ; set SSID
+    jr .config_set_string
+
+.config_set_string:
+    ld (CONFIG_BUFFER), a
+    push hl
+    call strlen
+    ld a, l
+    ld (CONFIG_BUFFER+1), a
+    add 2
+    ld b, a
+    pop hl
+    ld de, CONFIG_BUFFER+2
+    call strcpy
+    ld a, 8     ; set string command.
+    call .config_send_request_and_wait_reply
+    ret nz
+
+    ld a, (CONFIG_BUFFER)
+    ret
 
 CONFIG_BUFFER: equ UI_BUFFER+1  ; we use the UI buffer, first byte is API code...
 
