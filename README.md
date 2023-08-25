@@ -12,6 +12,7 @@ not stop just because "somebody else already did something similar" :)
 
   - Initial version, 2023-04-23
   - First steps Firmware/Config program, 2023-05-27
+  - First public visible NabuNet server code, 2023-08-25
 
 ## References used
 
