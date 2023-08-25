@@ -151,7 +151,8 @@ namespace NabuNet
                 .AddSingleton<ILibraryCredits>(new LibraryCreditFileReader("library-credits.json", "Libraries"))
                 .AddSingleton<ILibraryCredits>(new LibraryCreditFileReader("assets-credits.json", "Assets"))
                 .AddSingleton<ILibraryCredits>(new LibraryCreditFileReader("theming/credits.json", "Theme specific"))
-                .AddTransient<IAdminReportManager, AdminReportManager>();
+                .AddTransient<IAdminReportManager, AdminReportManager>()
+                .AddTransient<ITemplateManager, FileTemplateManager>()
             ;
 
 

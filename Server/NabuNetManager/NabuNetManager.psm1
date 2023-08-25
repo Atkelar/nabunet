@@ -66,6 +66,19 @@ class NabuHostInfo {
     [bool] $HasToken
 }
 
+class NabuTemplateInfo {
+    NabuTemplateInfo($in, $name = $null) {
+        $this.Id = $name ?? $in.Id
+        $this.Subject = $in.Subject
+        $this.Body = $in.Body
+    }
+    [ValidatePattern("^[a-zA-Z0-9]+$", ErrorMessage = "Only letters and digits allowed!")]
+    [string] $Id
+    [ValidatePattern("^[^\n\r]+$", ErrorMessage = "May not contain newlines!")]
+    [string] $Subject
+    [string] $Body
+}
+
 # helper functions next...
 
 function Save-RegisteredHost {
@@ -163,7 +176,7 @@ function Call-Napi {
         }
     }
     if (!$Connection) {
-        throw "Session is not connected! Use Connect-NabuHost first!"
+        throw "Session is not connected! Use Connect-NabuNetHost first!"
     }
     $Uri = "$($Connection.RemoteBaseUri)/$Version/$Path"
     if ($Query) {
@@ -190,6 +203,7 @@ function Call-Napi {
         200 { $tmp }    # normal result.
         204 {}  # expected sometimes: no content.
         302 { throw "Access denied!" }  # 302 redirect to login page; should look into that and make the server return a better error, but it's OK for now.
+        404 { Write-Error "Item not found" }
         default { throw "Unkown/unexpected status code returned from remote API: $code" }
     }
 
@@ -197,14 +211,14 @@ function Call-Napi {
 
 # actual module functions start here...
 
-function Get-NabuAccounts {
+function Get-Accounts {
     [CmdletBinding()]
     param (
     )
     Call-Napi -Path "accounts"# | ForEach-Object { @{ UserName = $_ } }
 }
 
-function Get-NabuServerAnnouncement {
+function Get-ServerAnnouncement {
     [CmdletBinding()]
     param (
         [switch]$Raw
@@ -227,7 +241,7 @@ If provided, the returned article info from the server will be the raw (markdown
     Call-Napi -Path "announcement" -Query @{ raw = $Raw.IsPresent } | ForEach-Object { New-Object NabuArticleBase -ArgumentList $_ }
 }
 
-function Clear-NabuServerAnnouncement {
+function Clear-ServerAnnouncement {
     <#
 .SYNOPSIS
 Clears (removes) a server announcement message (maintenance notice)
@@ -249,7 +263,7 @@ nothing
     }
 }
 
-function Set-NabuServerAnnouncement {
+function Set-ServerAnnouncement {
     <#
 .SYNOPSIS
 Sets (updates or creates) a server announcement message (maintenance notice)
@@ -291,7 +305,7 @@ If provided, the returned article info from the server will be the raw (markdown
     }
 }
 
-function Register-NabuHost {
+function Register-Host {
     <#
 .SYNOPSIS 
 Creates a new server registration for the current user.
@@ -301,7 +315,7 @@ The server configuration is stored in the user home folder, subfolder ".nabunet"
 as a configuration file with the server name as a root name, psd1 as an extension.
 
 If a token is provided, it will be used for authentication, if not, the token 
-needs to be provided by calling the Update-NabuHost cmdlet.
+needs to be provided by calling the Update-NabuNetHost cmdlet.
 
 .PARAMETER Name
 The local name to use for the server. Defaults to the host name if not specified.
@@ -336,7 +350,7 @@ The path of the NAPI interface, defaults to the "/napi" folder.
 
     $h = Load-RegisteredHost -Name $Name
     if ($null -ne $h) {
-        throw "The name $Name is already registered! Remove it first or use Update-NabuHost"
+        throw "The name $Name is already registered! Remove it first or use Update-NabuNetHost"
     }
 
     $h = New-Object NabuHost -ArgumentList $Name
@@ -351,21 +365,21 @@ The path of the NAPI interface, defaults to the "/napi" folder.
     Save-RegisteredHost -Name $Name -Data $h
 }
 
-function Connect-NabuHost {
+function Connect-Host {
     <#
 .SYNOPSIS
 Connect the current powershell sessino to a server.
 
 .DESCRIPTION
-You can either save a connection with a name (see Register-NabuHost) and use that name for easy connectivity, or specify all required parameters here for a dynamic, not saved connection.
+You can either save a connection with a name (see Register-NabuNetHost) and use that name for easy connectivity, or specify all required parameters here for a dynamic, not saved connection.
 
 .EXAMPLE
-Connect-NabuHost -Name testserver
+Connect-NabuNetHost -Name testserver
 
 Connects to the previously registered server (and token!) called "testserver".
 
 .LINK 
-Connect-NabuHost
+Connect-NabuNetHost
 
 .PARAMETER Name
 The name of a registered server.
@@ -437,7 +451,7 @@ The path of the NAPI interface, defaults to the "/napi" folder.
     }
 }
 
-function Get-NabuHost {
+function Get-Host {
     <#
 .SYNOPSIS
 Lists the current connected Nabu server or a list of all registered servers for the current user.
@@ -463,5 +477,38 @@ NabuHostInfo
     }
 }
 
-Export-ModuleMember -Function Get-NabuHost, Get-NabuAccounts, Get-NabuServerAnnouncement, `
-    Clear-NabuServerAnnouncement, Set-NabuServerAnnouncement, Connect-NabuHost, Register-NabuHost
+function Get-MailTemplate {
+    [CmdletBinding()]
+    param (
+        [ValidatePattern("^[a-zA-Z0-9-]+$", ErrorMessage = "Only digits and letters allowed!")]
+        [string]$Id
+    )
+
+    Call-Napi -Path "template/$id" | ForEach-Object { New-Object NabuTemplateInfo -ArgumentList $_, $id }
+   
+}
+
+function Set-MailTemplate {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "Medium")]
+    param (
+        [Parameter(ValueFromPipelineByPropertyName = $true)]
+        [ValidatePattern("^[a-zA-Z0-9-]+$", ErrorMessage = "Only digits and letters allowed!")]
+        [string]$Id,
+        [Parameter(ValueFromPipelineByPropertyName = $true, Mandatory = $true)]
+        [ValidateLength(1, 1024)]
+        [ValidatePattern("^[^\n\r]+$", ErrorMessage = "No newlines allowed!")]
+        [string]$Subject,
+        [Parameter(ValueFromPipelineByPropertyName = $true, Mandatory = $true)]
+        [string]$Body
+    )
+
+    if ($PSCmdlet.ShouldProcess("$Id", "Updating mail template, new subject=$Subject, body=$($body.Length) characters.")) {
+        Call-Napi -Path "template/$id" -Method "POST" -Body @{ Subject = $Subject; Body = $Body }
+    }
+  
+}
+
+
+Export-ModuleMember -Function Get-Host, Get-Accounts, Get-ServerAnnouncement, `
+    Clear-ServerAnnouncement, Set-ServerAnnouncement, Connect-Host, Register-Host, `
+    Get-MailTemplate, Set-MailTemplate

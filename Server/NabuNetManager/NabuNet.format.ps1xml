@@ -18,11 +18,11 @@
                 </TableColumnHeader>
                 <TableColumnHeader>
                     <Label>LastContacted</Label>
-                    <Width>18</Width>
+                    <Width>22</Width>
                 </TableColumnHeader>
                 <TableColumnHeader>
                     <Label>RemoteName</Label>
-                    <Width>30</Width>
+                    <Width>32</Width>
                 </TableColumnHeader>
             </TableHeaders>
             <TableRowEntries>
@@ -88,6 +88,36 @@
                         </TableColumnItem>
                         <TableColumnItem>
                             <PropertyName>Article</PropertyName>
+                        </TableColumnItem>
+                    </TableColumnItems>
+                </TableRowEntry>
+            </TableRowEntries>
+        </TableControl>
+    </View>
+    <View>
+        <Name>NabuMailTemplate</Name>
+        <ViewSelectedBy>
+            <TypeName>NabuTemplateInfo</TypeName>
+        </ViewSelectedBy>
+        <TableControl>
+            <TableHeaders>
+                <TableColumnHeader>
+                    <Width>20</Width>
+                    <Label>Name</Label>
+                </TableColumnHeader>
+                <TableColumnHeader>
+                    <Label>Subject</Label>
+                    <Width>50</Width>
+                </TableColumnHeader>
+            </TableHeaders>
+            <TableRowEntries>
+                <TableRowEntry>
+                    <TableColumnItems>
+                        <TableColumnItem>
+                            <PropertyName>Name</PropertyName>
+                        </TableColumnItem>
+                        <TableColumnItem>
+                            <PropertyName>Subject</PropertyName>
                         </TableColumnItem>
                     </TableColumnItems>
                 </TableRowEntry>

@@ -69,8 +69,9 @@
     # NestedModules = @()
 
     # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-    FunctionsToExport    = @("Register-NabuHost", "Get-NabuHost", "Connect-NabuHost", 
-        "Get-NabuAccounts", "Get-NabuServerAnnouncement", "Set-NabuServerAnnouncement", "Clear-NabuServerAnnouncement")
+    FunctionsToExport    = @("Register-Host", "Get-Host", "Connect-Host", 
+        "Get-Accounts", "Get-ServerAnnouncement", "Set-ServerAnnouncement", "Clear-ServerAnnouncement",
+        "Get-MailTemplate", "Set-MailTemplate")
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
     CmdletsToExport      = @()
@@ -96,19 +97,19 @@
         PSData = @{
 
             # Tags applied to this module. These help with module discovery in online galleries.
-            # Tags = @()
+            Tags         = @("Nabu", "Retro Computing")
 
             # A URL to the license for this module.
-            # LicenseUri = ''
+            # LicenseUri = 'https://'
 
             # A URL to the main website for this project.
-            # ProjectUri = ''
+            ProjectUri   = 'https://github.com/Atkelar/nabunet'
 
             # A URL to an icon representing this module.
-            # IconUri = ''
+            IconUri      = 'https://raw.githubusercontent.com/Atkelar/nabunet/main/Assets/nabunet_logo.png'
 
             # ReleaseNotes of this module
-            # ReleaseNotes = ''
+            ReleaseNotes = 'This module contains accessor wrappers for talking with the NabuNet server software. See project website for more details!'
 
             # Prerelease string of this module
             # Prerelease = ''
@@ -127,7 +128,6 @@
     # HelpInfoURI = ''
 
     # Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
-    # DefaultCommandPrefix = ''
-
+    DefaultCommandPrefix = 'NabuNet'
 }
 

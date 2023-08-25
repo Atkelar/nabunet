@@ -306,6 +306,40 @@ namespace NabuNet
             return details;
         }
 
+        /// <summary>
+        /// Reads the mail template by the provided ID and returns the current content.
+        /// </summary>
+        /// <param name="id">The mail template ID</param>
+        /// <param name="mgr">*internal*</param>
+        [HttpGet("template/{id}")]
+        [Authorize(SecurityPolicy.SiteAdmin)]
+        public async Task<ActionResult<TemplateContent>> GetMailTemplate([FromRoute] string id, [FromServices] ITemplateManager mgr)
+        {
+            var tpl = await mgr.LoadTemplateAsync(id);
+            if (tpl == null)
+                return NotFound();
+            return tpl;
+        }
 
+        /// <summary>
+        /// Reads the mail template by the provided ID and returns the current content.
+        /// </summary>
+        /// <param name="id">The mail template ID</param>
+        /// <param name="mgr">*internal*</param>
+        [HttpPost("template/{id}")]
+        [Authorize(SecurityPolicy.SiteAdmin)]
+        public async Task<ActionResult> UpdateMailTemplate([FromRoute][RegularExpression(@"^[a-zA-Z0-9-]+$")] string id, [FromServices] ITemplateManager mgr, [FromBody] TemplateContent content)
+        {
+            try
+            {
+                await mgr.UpdateTemplateAsync(id, content.Subject, content.Body);
+            }
+            catch (Exception ex)
+            {
+                _Logger.LogError(ex, "Updating the mail template {key} failed!", id);
+                return NotFound();
+            }
+            return NoContent();
+        }
     }
 }
