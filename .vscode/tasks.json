@@ -7,7 +7,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/NabuNet/NabuNet.csproj",
+                "${workspaceFolder}/Server/NabuNet/NabuNet.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
@@ -19,7 +19,7 @@
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/NabuNet/NabuNet.csproj",
+                "${workspaceFolder}/Server/NabuNet/NabuNet.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
@@ -33,7 +33,7 @@
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/NabuNet/NabuNet.csproj"
+                "${workspaceFolder}/Server/NabuNet/NabuNet.csproj"
             ],
             "problemMatcher": "$msCompile"
         }
