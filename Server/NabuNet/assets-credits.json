@@ -3,5 +3,9 @@
     "Comment": "Pixelated font for titles.",
     "Name": "Retro Gaming Font",
     "Url": "https://www.fontget.com/font/retro-gaming/"
+  },
+  "css-design": {
+    "Comment": "The main project's CSS was provided by Karpour",
+    "Name": "CSS and layout"
   }
 }
