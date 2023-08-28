@@ -30,7 +30,7 @@
     Copyright            = '(c) 2023 by Atkelar. All rights reserved.'
 
     # Description of the functionality provided by this module
-    # Description = ''
+    Description          = 'This is a powershell script module to wrap access to the REST endpoints of the NabuNet retro computing service; Curently a pure beta and "try something new" release. See the project website on GitHub for details and updates!'
 
     # Minimum version of the PowerShell engine required by this module
     PowerShellVersion    = '7.0'
@@ -97,7 +97,7 @@
         PSData = @{
 
             # Tags applied to this module. These help with module discovery in online galleries.
-            Tags         = @("Nabu", "Retro Computing")
+            Tags         = @("Nabu", "Retro")
 
             # A URL to the license for this module.
             # LicenseUri = 'https://'
