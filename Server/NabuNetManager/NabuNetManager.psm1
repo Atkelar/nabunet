@@ -117,7 +117,7 @@ function Load-RegisteredHost {
     }
 }
 
-function Get-AllRegisteredHosts {
+function Get-AllRegisteredHost {
     [CmdletBinding()]
     param (
     )
@@ -211,7 +211,7 @@ function Call-Napi {
 
 # actual module functions start here...
 
-function Get-Accounts {
+function Get-Account {
     [CmdletBinding()]
     param (
     )
@@ -299,9 +299,11 @@ If provided, the returned article info from the server will be the raw (markdown
         [Nullable[datetime]]$ReferenceDate = $null,
         [switch]$Raw
     )
-    if ($PSCmdlet.ShouldProcess($CurrentContext.Host.Name, "Update announcement message on server, $Title")) {
-        Write-Verbose "Setting server announcement message to '$Title', $($Article.Length) characters article..."
-        Call-Napi -Path "announcement" -Method "POST" -Query @{ raw = $Raw.IsPresent } -Body @{ title = $Title; article = $Article; referenceDate = $ReferenceDate } | ForEach-Object { New-Object NabuArticleBase -ArgumentList $_ }
+    process {
+        if ($PSCmdlet.ShouldProcess($CurrentContext.Host.Name, "Update announcement message on server, $Title")) {
+            Write-Verbose "Setting server announcement message to '$Title', $($Article.Length) characters article..."
+            Call-Napi -Path "announcement" -Method "POST" -Query @{ raw = $Raw.IsPresent } -Body @{ title = $Title; article = $Article; referenceDate = $ReferenceDate } | ForEach-Object { New-Object NabuArticleBase -ArgumentList $_ }
+        }
     }
 }
 
@@ -467,8 +469,8 @@ NabuHostInfo
         [switch]$List
     )
     if ($List.IsPresent) {
-        #Get-AllRegisteredHosts | ForEach-Object { Import-PowerShellDataFile -Path $_.FullName }
-        Get-AllRegisteredHosts | ForEach-Object { New-Object NabuHostInfo -ArgumentList (Import-Clixml -Path $_.FullName), $_.Name.Replace(".xml", "") }  #| Where-Object { $_ -is [NabuHost] }
+        #Get-AllRegisteredHost | ForEach-Object { Import-PowerShellDataFile -Path $_.FullName }
+        Get-AllRegisteredHost | ForEach-Object { New-Object NabuHostInfo -ArgumentList (Import-Clixml -Path $_.FullName), $_.Name.Replace(".xml", "") }  #| Where-Object { $_ -is [NabuHost] }
     }
     else {
         if ($CurrentContext.Host) {
@@ -529,9 +531,10 @@ The body of the e-mail. Can include handlebars.net placeholders and should be HT
         [Parameter(ValueFromPipelineByPropertyName = $true, Mandatory = $true)]
         [string]$Body
     )
-
-    if ($PSCmdlet.ShouldProcess("$Id", "Updating mail template, new subject=$Subject, body=$($body.Length) characters.")) {
-        Call-Napi -Path "template/$id" -Method "POST" -Body @{ Subject = $Subject; Body = $Body }
+    process {
+        if ($PSCmdlet.ShouldProcess("$Id", "Updating mail template, new subject=$Subject, body=$($body.Length) characters.")) {
+            Call-Napi -Path "template/$id" -Method "POST" -Body @{ Subject = $Subject; Body = $Body }
+        }
     }
   
 }
@@ -553,6 +556,6 @@ function Approve-Account {
 }
 
 
-Export-ModuleMember -Function Get-Host, Get-Accounts, Get-ServerAnnouncement, `
+Export-ModuleMember -Function Get-Host, Get-Account, Get-ServerAnnouncement, `
     Clear-ServerAnnouncement, Set-ServerAnnouncement, Connect-Host, Register-Host, `
     Get-MailTemplate, Set-MailTemplate, Approve-Account
