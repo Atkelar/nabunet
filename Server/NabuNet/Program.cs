@@ -153,7 +153,11 @@ namespace NabuNet
                 .AddSingleton<ILibraryCredits>(new LibraryCreditFileReader("theming/credits.json", "Theme specific"))
                 .AddTransient<IAdminReportManager, AdminReportManager>()
                 .AddTransient<ITemplateManager, FileTemplateManager>()
-            ;
+                .Configure<ForwardedHeadersOptions>(options =>
+                    {
+                        options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.All;
+                    })
+                    ;
 
 
             await using (var app = builder.Build())
@@ -170,6 +174,8 @@ namespace NabuNet
                     app.UseSwagger();
                     app.UseSwaggerUI();
                 }
+
+                app.UseForwardedHeaders();
 
                 app.UseHttpsRedirection();
                 app.UseWebSockets(new WebSocketOptions() { KeepAliveInterval = System.TimeSpan.FromMinutes(1) });

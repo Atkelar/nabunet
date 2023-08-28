@@ -365,7 +365,7 @@ namespace NabuNet.Controllers
                         switch (nextStep)
                         {
                             case UserLoginStep1Result.Success:  // we are done...
-                                error = string.Empty;
+                                error = null;
                                 break;
                             case UserLoginStep1Result.SetupFactorTwo:   // we need to capture factor #2...
                                 return View("setupfactortwo", new Setup2FAModel() { UserName = userProfile.Name, Parameters = await _UserManager.GetNew2FAChallenge(userProfile.Name) });

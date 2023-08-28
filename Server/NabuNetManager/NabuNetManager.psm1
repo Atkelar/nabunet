@@ -478,8 +478,20 @@ NabuHostInfo
 }
 
 function Get-MailTemplate {
+    <#
+.SYNOPSIS
+Retreives an e-mail template from the NabuNet server.
+
+.DESCRIPTION
+Asks the server for the subject/body of the e-mail template. Needs site admin privileges.
+
+.PARAMETER Id
+The ID (key) of the mail template.
+
+#>
     [CmdletBinding()]
     param (
+        [Parameter(Mandatory = $true)]
         [ValidatePattern("^[a-zA-Z0-9-]+$", ErrorMessage = "Only digits and letters allowed!")]
         [string]$Id
     )
@@ -489,9 +501,25 @@ function Get-MailTemplate {
 }
 
 function Set-MailTemplate {
+    <#
+.SYNOPSIS
+Updated an e-mail template on the NabuNet server.
+
+.DESCRIPTION
+Sends the new subject/body of the e-mail template to the server. Needs site admin privileges.
+
+.PARAMETER Id
+The ID (key) of the mail template.
+
+.PARAMETER Subject
+The subject line for the e-mail. Can include handlebars.net placeholders according to the template definition.
+
+.PARAMETER Body
+The body of the e-mail. Can include handlebars.net placeholders and should be HTML formatted.
+#>
     [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "Medium")]
     param (
-        [Parameter(ValueFromPipelineByPropertyName = $true)]
+        [Parameter(ValueFromPipelineByPropertyName = $true, Mandatory = $true)]
         [ValidatePattern("^[a-zA-Z0-9-]+$", ErrorMessage = "Only digits and letters allowed!")]
         [string]$Id,
         [Parameter(ValueFromPipelineByPropertyName = $true, Mandatory = $true)]
@@ -508,7 +536,23 @@ function Set-MailTemplate {
   
 }
 
+# approveaccount/{userName}
+
+function Approve-Account {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "Medium")]
+    param (
+        [Parameter()]
+        [ValidateLength(1, 32)]
+        [ValidatePattern("^[a-zA-Z0-9-]+$", ErrorMessage = "Only digits and letters allowed!")]
+        [string]
+        $Name
+    )
+    if ( $PSCmdlet.ShouldProcess($Name, "Confirm user account")) {
+        Call-Napi -Path "approveaccount/$Name" -Method "PUT"
+    }
+}
+
 
 Export-ModuleMember -Function Get-Host, Get-Accounts, Get-ServerAnnouncement, `
     Clear-ServerAnnouncement, Set-ServerAnnouncement, Connect-Host, Register-Host, `
-    Get-MailTemplate, Set-MailTemplate
+    Get-MailTemplate, Set-MailTemplate, Approve-Account
