@@ -1,5 +1,9 @@
+using System;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace NabuNet
 {
@@ -24,6 +28,17 @@ namespace NabuNet
             else
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                ILogger<NabuModemMiddleware> logger = context.RequestServices.GetRequiredService<ILogger<NabuModemMiddleware>>();
+                if (logger.IsEnabled(LogLevel.Trace))
+                {
+                    StringBuilder sb = new StringBuilder();
+                    sb.AppendLine("Non-WS request received:");
+                    foreach (var item in context.Request.Headers)
+                    {
+                        sb.AppendFormat("  {0}: {1}{2}", item.Key, item.Value, Environment.NewLine);
+                    }
+                    logger.LogTrace(sb.ToString());
+                }
             }
         }
     }
