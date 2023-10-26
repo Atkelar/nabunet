@@ -637,23 +637,26 @@ bool NabuNetModem::handle_state_loop()
     case STATE_START:
       diag("START!\n");
       // we force ourselves into servicing mode if we have nowhere to go...
-      if (!(LocalServerAvailbale || RemoteServerAvailable))
+      if (!IsServicingMode)
       {
-        IsServicingMode = true;
-        blink_status_confirmed(PIN_LED_ERR, ERROR_SIGNAL_NOSERVER);
-      }
-      else
-      {
-        if (LocalServerAvailbale)
-          ServerHandler::set_current(&LocalServerInstance);
-        else  
-          ServerHandler::set_current(&RemoteServerInstance);
-        NabuIO.set_active_handler(new HCCAHandler(ModemConfig.ActiveConfig.ChannelCode, false));
+        if (!(LocalServerAvailbale || RemoteServerAvailable))
+        {
+          IsServicingMode = true;
+          blink_status_confirmed(PIN_LED_ERR, ERROR_SIGNAL_NOSERVER);
+        }
+        else
+        {
+          if (LocalServerAvailbale)
+            ServerHandler::set_current(&LocalServerInstance);
+          else  
+            ServerHandler::set_current(&RemoteServerInstance);
+          NabuIO.set_active_handler(new HCCAHandler(false, ModemConfig.ActiveConfig.ChannelCode));
+        }
       }
       if (IsServicingMode)
       {
         ServerHandler::set_current(&ConfigServerInstance);
-        NabuIO.set_active_handler(new HCCAHandler(0, false));
+        NabuIO.set_active_handler(new HCCAHandler(false, 0));
       }
       diag("\nserver starting");
       diag(ServerHandler::current()->server_name());
