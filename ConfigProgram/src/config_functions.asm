@@ -378,3 +378,21 @@ config_fetch_ssid:
     ret
 
 
+; return nz if error
+; a: bitmask of available update images.
+config_fetch_sd_update_status:
+    ld a, 0Dh
+    ld b, 0
+    call .config_send_request_and_wait_reply
+    ret nz
+    ld a, (CONFIG_BUFFER)
+    ret
+
+
+; return nz if error
+; buffer: bitmask of available updates, [len] version for boot image, [len] version for firmware
+config_fetch_remote_update_status:
+    ld a, 0Eh
+    ld b, 0
+    call .config_send_request_and_wait_reply
+    ret

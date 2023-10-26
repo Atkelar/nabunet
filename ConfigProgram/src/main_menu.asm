@@ -113,7 +113,11 @@ defb 0fch, 0fdh, 0feh, 0ffh, 0ah, 0
     defw 0
     defw 0
 
-    defb "5", 0
+    defb "9", 0
+    defw .Opt7
+    defw update_menu
+
+    defb "0", 0
     defw .Opt5
     defw .ask_reboot
 
@@ -137,6 +141,8 @@ defb "Remote Server",0
 defb "Local Server",0
 .Opt5:
 defb "Reboot!",0
+.Opt7:
+defb "Update...",0
 .Opt6:
 defb "Diagnostics",0
 

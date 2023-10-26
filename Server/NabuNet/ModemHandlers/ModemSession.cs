@@ -28,6 +28,9 @@ namespace NabuNet.ModemHandlers
         private string? RemoteConfigVersion;
         private string? RemoteMacAddress;
 
+        private int? ConfigImageAsset;
+        private int? FirmwareImageAsset;
+
         byte[] inputBuffer = new byte[512];
 
         ArraySegment<byte> output = new ArraySegment<byte>(new byte[512]);
@@ -101,6 +104,17 @@ namespace NabuNet.ModemHandlers
                                         }
                                     }
                                     await SendReply(response, token);
+                                    break;
+                                case 6:
+                                    var request2 = BasePacket.Deserialize<UpdateImageRequest>(trimmed);
+                                    var servers2 = Services.GetRequiredService<IVirtualServerManager>();
+                                    var details = await servers2.GetUpdateDetails();
+
+                                    // remember the image asset IDs for eventual download so they match up to the versions.
+                                    ConfigImageAsset = details.ConfigImageAsset;
+                                    FirmwareImageAsset = details.FirmwareImageAsset;
+
+                                    await SendReply(new UpdateImageResponse(details.ConfigImageVersion, details.FirmwareImageVersion), token);
                                     break;
                             }
                         }

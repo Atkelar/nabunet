@@ -149,6 +149,7 @@ include "ui.asm"
 
 ; include configuration program parts
 
+include "update_menu.asm"
 include "main_menu.asm"
 include "wifi_menu.asm"
 include "remote_menu.asm"
@@ -253,4 +254,4 @@ menu_temp_vars:
     defs 256
 
 image_version_string:
-    defb "1.0.0.1 BETA",0
+    defb "1.0.2-BETA",0

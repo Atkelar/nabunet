@@ -6,6 +6,7 @@
 #include "Utilities.h"
 #include "ConfigFile.h"
 #include "ServerAbstraction.h"
+#include "ModemHandler.h"
 
 
 NabuNetHandler::NabuNetHandler(bool servicing) : NabuHandlerBase()
@@ -676,6 +677,39 @@ bool NabuNetHandler::handle_modem_config_command(NabuIOHandler* input, bool isRe
         shared_buffer[0] = 0;  // return code 0 = status updated.
         return send_packet(input, 0xF, true, shared_buffer, 1);
       }
+      break;
+      case 0x0D:
+        bool configImage = Modem.check_config_image_on_card();
+        bool firmwareImage = Modem.has_firmware_image_on_card();
+        shared_buffer[0] = (configImage ? 1 : 0) | (firmwareImage ? 2 : 0);
+        return send_packet(input, 0xF, true, shared_buffer, 1);
+      break;
+      case 0x0E:
+        shared_buffer[0] = 0;
+        int len = 1;
+        if (RemoteServerInstance.is_connected())
+        {
+          char* strConfig = RemoteServerInstance.config_image_version();
+          int sLen;
+          if (strConfig!=NULL && strConfig[0]!=0)
+          {
+            shared_buffer[0] |= 1;
+            sLen= strlen(strConfig);
+            shared_buffer[1] = sLen;
+            len+=sLen+1;
+            strcpy((char*)shared_buffer + 2, strConfig);
+          }
+          char* strFirm = RemoteServerInstance.firmware_image_version();
+          if (strFirm!=NULL && strFirm[0]!=0)
+          {
+            shared_buffer[0] |= 2;
+            sLen= strlen(strConfig);
+            shared_buffer[len] = sLen;
+            strcpy((char*)shared_buffer + len + 1, strConfig);
+            len+=sLen+1;
+          }
+        }
+        return send_packet(input, 0xF, true, shared_buffer, len);
       break;
     }
   }

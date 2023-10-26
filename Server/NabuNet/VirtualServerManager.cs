@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
+using NabuNet.ProgramModel;
 
 namespace NabuNet
 {
@@ -42,6 +43,51 @@ namespace NabuNet
                 result.Insert(0, info);
             }
             return result.OrderBy(x => x.Code);
+        }
+
+        const string ServerUpdateDocumentName = "UpdateImages";
+
+        public async Task SetConfigImageAsset(int value)
+        {
+            ServerUpdateDetails details = (await _Database.GetSingleDocumentAsync<ServerUpdateDetails?>(ServerUpdateDocumentName)) ?? new ServerUpdateDetails();
+            if (value != 0)
+            {
+                var x = await _Assets.GetInfo(value);
+                if (x.Type == AssetType.Config)
+                {
+                    details.ConfigImageVersion = x.VersionLabel;
+                    details.ConfigImageAsset = value;
+                }
+            }
+            else
+            {
+                details.ConfigImageVersion = null;
+                details.ConfigImageAsset = null;
+            }
+            await _Database.SetSingleDocumentAsync(ServerUpdateDocumentName, details);
+        }
+        public async Task SetFirmwareImageAsset(int value)
+        {
+            ServerUpdateDetails details = (await _Database.GetSingleDocumentAsync<ServerUpdateDetails?>(ServerUpdateDocumentName)) ?? new ServerUpdateDetails();
+            if (value != 0)
+            {
+                var x = await _Assets.GetInfo(value);
+                if (x.Type == AssetType.Firmware)
+                {
+                    details.FirmwareImageVersion = x.VersionLabel;
+                    details.FirmwareImageAsset = value;
+                }
+            }
+            else
+            {
+                details.FirmwareImageVersion = null;
+                details.FirmwareImageAsset = null;
+            }
+            await _Database.SetSingleDocumentAsync(ServerUpdateDocumentName, details);
+        }
+        public async Task<ServerUpdateDetails> GetUpdateDetails()
+        {
+            return (await _Database.GetSingleDocumentAsync<ServerUpdateDetails?>(ServerUpdateDocumentName)) ?? new ServerUpdateDetails();
         }
 
 

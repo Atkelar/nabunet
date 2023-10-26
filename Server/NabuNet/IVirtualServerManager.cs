@@ -7,6 +7,11 @@ namespace NabuNet
     {
         Task<IEnumerable<VirtualServerInfo>> GetList();
 
+
+        Task SetConfigImageAsset(int value);
+        Task SetFirmwareImageAsset(int value);
+        Task<ServerUpdateDetails> GetUpdateDetails();
+
         Task<VirtualServerDetails?> GetDetails(int code, bool onylEnabled);
         Task UpdateOwner(int id, string newOwner);
         Task UpdateName(int id, string newName);

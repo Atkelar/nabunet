@@ -32,8 +32,8 @@ namespace NabuNet
                 {
                     if (!item.CanDecompress)
                         throw new InvalidAssetDefinitionException($"File compression not supported: {item.Name}");
-                    if (item.Size > 0x10000)
-                        throw new InvalidAssetDefinitionException($"File with size > 64k not supported: {item.Size}");
+                    if (item.Size > 4 * 1024 * 1024)
+                        throw new InvalidAssetDefinitionException($"File with size > 4M not supported: {item.Size}");
                 }
 
                 var entry = zipFile.FindEntry("manifest.json", false);
@@ -75,10 +75,24 @@ namespace NabuNet
                         if (manifest.Assets[i] == manifest.Assets[j])
                             throw new InvalidAssetDefinitionException($"Manifest file name is duplicated: {manifest.Assets[i]}");
                 }
+
+                if (manifest.Type != "firmware")
+                {
+                    foreach (ZipEntry item in zipFile)
+                    {
+                        if (item.Size > 0x10000)
+                            throw new InvalidAssetDefinitionException($"File with size > 64k not supported: {item.Size}");
+                    }
+                }
+
                 switch (manifest.Type)
                 {
                     case "kernel":
                         return await CreateKernelDefinition(zipFile, manifest);
+                    case "firmware":
+                        return await CreateFirmwareDefinition(zipFile, manifest);
+                    case "config":
+                        return await CreateConfigDefinition(zipFile, manifest);
                     default:
                         throw new InvalidAssetDefinitionException($"Manifest type unrecognized: {manifest.Type}");
                 }
@@ -95,6 +109,92 @@ namespace NabuNet
         private readonly StorageConfig _Settings;
         private readonly string _BinaryRootFolder;
         private readonly IDatabase _Database;
+
+        private async Task<AssetDefinition> CreateConfigDefinition(ZipFile zipFile, ManifestContent manifest)
+        {
+            if (manifest.Type != "config")
+                throw new InvalidOperationException("Not a config manifest!");
+
+            if (!manifest.Assets.Contains("nabuboot.img"))
+                throw new InvalidAssetDefinitionException("Config manifest is missing required 'nabuboot.img' file!");
+            if (manifest.Assets.Length !=1) // TODO: readme file!
+                throw new InvalidAssetDefinitionException("Config manifest contains extra files!");
+
+            AssetDefinition newDef = new AssetDefinition();
+            int newAssetId = await ReserveNewIdForAsset("create config asset");
+            string folderName = await EnsureFolderForAsset(newAssetId);
+            List<AssetBlobInfo> blobs = new List<AssetBlobInfo>();
+            try
+            {
+                int size = await ExtractFile(zipFile, "nabuboot.img", folderName);
+                blobs.Add(new AssetBlobInfo() { Name = "nabuboot.img", Size = size });
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidAssetDefinitionException($"Extracting files from package faild: {ex.Message}");
+            }
+
+            newDef.Id = newAssetId;
+            newDef.Name = $"Configuration program image {manifest.Version}";
+            newDef.CreatedAt = DateTime.UtcNow;
+            newDef.Visible = true;
+            newDef.VersionLabel = manifest.Version;
+            newDef.Author = manifest.Author;
+
+            newDef.Type = AssetType.Config;
+
+            newDef.Blobs = blobs.ToArray();
+
+            using (var target = File.Create(Path.Combine(folderName, "$info.json")))
+            {
+                System.Text.Json.JsonSerializer.Serialize(target, newDef);
+            }
+
+            return newDef;
+        }
+
+        private async Task<AssetDefinition> CreateFirmwareDefinition(ZipFile zipFile, ManifestContent manifest)
+        {
+            if (manifest.Type != "firmware")
+                throw new InvalidOperationException("Not a firmware manifest!");
+
+            if (!manifest.Assets.Contains("nabufirm.img"))
+                throw new InvalidAssetDefinitionException("Firmware manifest is missing required 'nabufirm.img' file!");
+            if (manifest.Assets.Length !=1) // TODO: readme file!
+                throw new InvalidAssetDefinitionException("Firmware manifest contains extra files!");
+
+            AssetDefinition newDef = new AssetDefinition();
+            int newAssetId = await ReserveNewIdForAsset("create firmware asset");
+            string folderName = await EnsureFolderForAsset(newAssetId);
+            List<AssetBlobInfo> blobs = new List<AssetBlobInfo>();
+            try
+            {
+                int size = await ExtractFile(zipFile, "nabufirm.img", folderName, 4 * 1024 * 1024);
+                blobs.Add(new AssetBlobInfo() { Name = "nabufirm.img", Size = size });
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidAssetDefinitionException($"Extracting files from package faild: {ex.Message}");
+            }
+
+            newDef.Id = newAssetId;
+            newDef.Name = $"Firmware image {manifest.Version}";
+            newDef.CreatedAt = DateTime.UtcNow;
+            newDef.Visible = true;
+            newDef.VersionLabel = manifest.Version;
+            newDef.Author = manifest.Author;
+
+            newDef.Type = AssetType.Firmware;
+
+            newDef.Blobs = blobs.ToArray();
+
+            using (var target = File.Create(Path.Combine(folderName, "$info.json")))
+            {
+                System.Text.Json.JsonSerializer.Serialize(target, newDef);
+            }
+
+            return newDef;
+        }
 
         private async Task<AssetDefinition> CreateKernelDefinition(ZipFile zipFile, ManifestContent manifest)
         {
@@ -145,7 +245,7 @@ namespace NabuNet
             return newDef;
         }
 
-        private async Task<int> ExtractFile(ZipFile zipFile, string file, string folderName)
+        private async Task<int> ExtractFile(ZipFile zipFile, string file, string folderName, int limit = 0x10000)
         {
             int index = zipFile.FindEntry(file, false);
             if (index < 0)  // should NOT happen, just to make a sensible error message anyway.
@@ -161,9 +261,9 @@ namespace NabuNet
                     {
                         r = await inStream.ReadAsync(buffer, 0, buffer.Length);
                         len += r;
-                        if (len > 0x10000)
+                        if (len > limit)
                         {
-                            string error = $"File {file} read more than 64k of input data! Might be a zip-bomb?";
+                            string error = $"File {file} read more than {limit} of input data! Might be a zip-bomb?";
                             await LogStorageActivity(error);
                             throw new InvalidAssetDefinitionException(error);
                         }

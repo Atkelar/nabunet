@@ -9,6 +9,19 @@ $CurrentContext = @{
 
 # helper classes first...
 
+class NabuUpdateImages {
+    NabuUpdateImages($in){
+        $this.ConfigImageVersion = $in.ConfigImageVersion
+        $this.ConfigImageAssetId = $in.ConfigImageAsset
+        $this.FirmwareImageVersion = $in.FirmwareImageVersion
+        $this.FirmwareImageAssetId = $in.FirmwareImageAsset
+    }
+    [string]$ConfigImageVersion
+    [string]$FirmwareImageVersion
+    [Nullable[int]]$ConfigImageAssetId
+    [Nullable[int]]$FirmwareImageAssetId
+}
+
 class NabuArticleBase {
     NabuArticleBase($in) {
         $this.Title = $in.title
@@ -194,6 +207,15 @@ function Call-Napi {
     }
     if ($Body) {
         $Body = $Body | ConvertTo-Json
+        Write-Verbose "Body for request: $($Body.Length) characters"
+        if ($Body.Length -lt 100)
+        {
+            Write-Verbose " Body for request: $Body"
+        }
+        else
+        {
+            Write-Verbose " Body for request: $($Body.SubString(0,40))...$($Body.SubString($Body.Length-40))"
+        }
         $tmp = Invoke-RestMethod -Method $Method -Uri $Uri -UserAgent "NabuNetPS/1" -Headers $hdr -Body $Body -ContentType "application/json" -StatusCodeVariable code -SkipHttpErrorCheck
     }
     else {
@@ -204,7 +226,7 @@ function Call-Napi {
         204 {}  # expected sometimes: no content.
         302 { throw "Access denied!" }  # 302 redirect to login page; should look into that and make the server return a better error, but it's OK for now.
         404 { Write-Error "Item not found" }
-        default { throw "Unkown/unexpected status code returned from remote API: $code" }
+        default { Write-Verbose $tmp;  throw "Unkown/unexpected status code returned from remote API: $code" }
     }
 
 } 
@@ -217,6 +239,332 @@ function Get-Account {
     )
     Call-Napi -Path "accounts"# | ForEach-Object { @{ UserName = $_ } }
 }
+
+function Get-UpdateImages {
+    [CmdletBinding()]
+    param(
+    )
+    <#
+.SYNOPSIS
+Retreives the current configured update image details.
+
+.DESCRIPTION
+The NabuServer supports updates for the modem firmware and config programs. One of each can be active at any time.
+
+.OUTPUTS
+NabuUpdateImages
+#>
+
+    Call-Napi -Path "updates" | ForEach-Object { New-Object NabuUpdateImages -ArgumentList $_ }
+}
+
+function Set-FirmwareImage {
+    [CmdletBinding(DefaultParameterSetName="path")]
+    param(
+        [Parameter(ParameterSetName="path")]
+        [string]$Path,
+        [Parameter(ParameterSetName="raw")]
+        [byte[]]$Raw
+    )
+    <#
+.SYNOPSIS
+Updates the server's firmware boot image.
+
+.DESCRIPTION
+The NabuServer supports updates for the modem firmware and config programs. One of each can be active at any time.
+This call will set the image for the firmware, based on the provided package file.
+
+.OUTPUTS
+NabuUpdateImages
+#>
+    [string]$content = ""
+    if ($PSCmdlet.ParameterSetName -eq "path")
+    {
+        $content = [System.Convert]::ToBase64String((Get-Content -AsByteStream -Path $Path))
+    }
+    else {
+        $content = [System.Convert]::ToBase64String($Raw)
+    }
+    [int]$assetId = Call-Napi -Path "asset/deploy" -Method "POST" -Body $content
+    Call-Napi -Path "updates/set" -Method "PUT" -Query @{ newFirmwareAsset = $assetId } | ForEach-Object { New-Object NabuUpdateImages -ArgumentList $_ }
+}
+
+function Set-ConfigImage {
+    [CmdletBinding(DefaultParameterSetName="path")]
+    param(
+        [Parameter(ParameterSetName="path")]
+        [string]$Path,
+        [Parameter(ParameterSetName="raw")]
+        [byte[]]$Raw
+    )
+    <#
+.SYNOPSIS
+Updates the server's config program image.
+
+.DESCRIPTION
+The NabuServer supports updates for the modem firmware and config programs. One of each can be active at any time.
+This call will set the image for the config program, based on the provided package file.
+
+.OUTPUTS
+NabuUpdateImages
+#>
+    [string]$content = ""
+    if ($PSCmdlet.ParameterSetName -eq "path")
+    {
+        $content = [System.Convert]::ToBase64String((Get-Content -AsByteStream -Path $Path))
+    }
+    else {
+        $content = [System.Convert]::ToBase64String($Raw)
+    }
+    [int]$assetId = Call-Napi -Path "asset/deploy" -Method "POST" -Body $content
+    Call-Napi -Path "updates/set" -Method "PUT" -Query @{ newConfigAsset = $assetId } | ForEach-Object { New-Object NabuUpdateImages -ArgumentList $_ }
+}
+
+function Clear-FirmwareImage {
+    [CmdletBinding()]
+    param(
+    )
+    <#
+.SYNOPSIS
+Clears the server's firmware boot image.
+
+.DESCRIPTION
+The NabuServer supports updates for the modem firmware and config programs. One of each can be active at any time.
+This call will set the image for the firmware, based on the provided package file.
+
+.OUTPUTS
+NabuUpdateImages
+#>
+    Call-Napi -Path "updates/set" -Method "PUT" -Query @{ newFirmwareAsset = 0 } | ForEach-Object { New-Object NabuUpdateImages -ArgumentList $_ }
+}
+
+
+function Clear-ConfigImage {
+    [CmdletBinding()]
+    param(
+    )
+    <#
+.SYNOPSIS
+Clears the server's config program image.
+
+.DESCRIPTION
+The NabuServer supports updates for the modem firmware and config programs. One of each can be active at any time.
+This call will set the image for the config program, based on the provided package file.
+
+.OUTPUTS
+NabuUpdateImages
+#>
+    Call-Napi -Path "updates/set" -Method "PUT" -Query @{ newConfigAsset = 0 } | ForEach-Object { New-Object NabuUpdateImages -ArgumentList $_ }
+}
+
+function Build-ConfigAsset
+{
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][ValidatePattern("^[a-zA-Z0-9_\-\.][a-zA-Z0-9_\-\.\s]{1,30}[a-zA-Z0-9_\-\.]$")][string]$Title,
+        [Parameter(Mandatory=$true)][string]$Author,
+        [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)][string]$SourceImage,
+        [Parameter(Mandatory=$true)][string]$OutputPath
+    )
+    <#
+.SYNOPSIS
+Creates a NabuNet "asset" - i.e. a ZIP file with a manifest definition for uploading as a binary "item".
+
+.DESCRIPTION
+Binaries in NabuNet are made up of a set of actual files, depending on use. They share a common set of base properties in a
+definitin file, called a "manifest"; this cmdlet will create a proper asset for deployment. Note, that there are helper functions
+around that simplify well known asset creation with proper parameters!
+
+.OUTPUTS
+#>
+
+    [string]$tmp = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ([Guid]::NewGuid().ToString("n"))
+
+    Write-Verbose "Temp folder: $tmp"
+    $file = $null
+
+    New-Item -Path $tmp -ItemType Directory -ErrorAction Stop | Out-Null
+    try {
+
+        $img = Join-Path -Path $tmp -ChildPath "nabuboot.img"
+
+        Copy-Item -Path $SourceImage -Destination $img
+
+        Write-Verbose " Image: $img"
+
+        $buf = new-object byte[] 33
+        
+        $file = [System.IO.File]::OpenRead($img)
+        $ofs = $file.ReadByte();
+        $ofs = $ofs + $file.ReadByte() * 256
+        $ofs -= 0x140D
+
+        $file.Seek($ofs, "Begin") | Out-Null
+
+        $len = $file.Read($buf, 0, 32)
+
+        while ($len -gt 0 -and $buf[$len] -eq 0)
+        {
+            $len--
+        }
+        if ($buf[$len] -ne 0)
+        {
+            $len++
+        }
+
+        Write-Verbose "Read $len bytes from $ofs"
+
+        $str = [System.Text.Encoding]::ASCII.GetString($buf, 0, $len).Trim()
+
+        $file.Dispose()
+
+        Write-Verbose "Read version: $str"
+
+        Build-Asset -Title $Title -Version $str -Author $Author -Path $img -TempFolder $tmp -Type Config -OutputPath $OutputPath
+    }
+    finally  {
+        Remove-Item -Path $tmp -Recurse -Force
+        if ($file)
+        {
+            $file.Dispose();
+        }
+    }
+}
+function Build-FirmwareAsset
+{
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][ValidatePattern("^[a-zA-Z0-9_\-\.][a-zA-Z0-9_\-\.\s]{1,30}[a-zA-Z0-9_\-\.]$")][string]$Title,
+        [Parameter(Mandatory=$true)][ValidatePattern("^\d{1,3}\.\d{1,3}(\.\d{1,3})?(\-[a-zA-Z]{1,10})?$")] [string]$Version,
+        [Parameter(Mandatory=$true)][string]$Author,
+        [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)][string]$SourceImage,
+        [Parameter(Mandatory=$true)][string]$OutputPath
+    )
+    <#
+.SYNOPSIS
+Creates a NabuNet "asset" - i.e. a ZIP file with a manifest definition for uploading as a binary "item".
+
+.DESCRIPTION
+Binaries in NabuNet are made up of a set of actual files, depending on use. They share a common set of base properties in a
+definitin file, called a "manifest"; this cmdlet will create a proper asset for deployment. Note, that there are helper functions
+around that simplify well known asset creation with proper parameters!
+
+.OUTPUTS
+#>
+
+    [string]$tmp = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ([Guid]::NewGuid().ToString("n"))
+
+    Write-Verbose "Temp folder: $tmp"
+
+    New-Item -Path $tmp -ItemType Directory -ErrorAction Stop | Out-Null
+    try {
+
+        $img = Join-Path -Path $tmp -ChildPath "nabufirm.img"
+
+        Copy-Item -Path $SourceImage -Destination $img
+
+        Write-Verbose " Image: $img"
+
+        Build-Asset -Title $Title -Version $Version -Author $Author -Path $img -TempFolder $tmp -BigBlob -Type Firmware -OutputPath $OutputPath
+    }
+    finally  {
+        Remove-Item -Path $tmp -Recurse -Force
+    }
+
+}
+
+function Build-Asset {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][ValidatePattern("^[a-zA-Z0-9_\-\.][a-zA-Z0-9_\-\.\s]{1,30}[a-zA-Z0-9_\-\.]$")][string]$Title,
+        [Parameter(Mandatory=$true)][ValidatePattern("^\d{1,3}\.\d{1,3}(\.\d{1,3})?(\-[a-zA-Z]{1,10})?$")] [string]$Version,
+        [Parameter(Mandatory=$true)][string]$Author,
+        [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)][ValidateCount(1,255)] [string[]]$Path,
+        [Parameter(Mandatory=$true)][string]$OutputPath,
+        [ValidateSet("ResourceOnly","Kernel","Program","Firmware","Config")][string]$Type = "ResourceOnly",
+        [string]$KernelType = "NabuNet",
+        [switch]$BigBlob,
+        [string]$TempFolder = $null
+    )
+    <#
+.SYNOPSIS
+Creates a NabuNet "asset" - i.e. a ZIP file with a manifest definition for uploading as a binary "item".
+
+.DESCRIPTION
+Binaries in NabuNet are made up of a set of actual files, depending on use. They share a common set of base properties in a
+definitin file, called a "manifest"; this cmdlet will create a proper asset for deployment. Note, that there are helper functions
+around that simplify well known asset creation with proper parameters!
+
+.OUTPUTS
+#>
+
+    Write-Verbose "Build asset.."
+
+    [string]$tmp = $null
+    if ($TempFolder -eq $null)
+    {
+        $tmp = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ([Guid]::NewGuid().ToString("n"))
+        New-Item -Path $tmp -ItemType Directory | Out-Null
+        $TempFolder = $tmp
+    }
+    
+    try {
+
+        [string]$mani = Join-Path -Path $TempFolder -ChildPath "manifest.json"
+        
+        $list = @(Get-Item -Path $Path -ErrorAction Stop)
+
+        Write-Verbose "Found $($list.Length) files."
+
+        [bool]$hadError = $false
+
+        [int]$limit = 0x10000
+        if ($BigBlob.IsPresent)
+        {
+            $limit = 4mb
+        }
+        $itemErrors = @($list | Where-Object -Property Length -gt $limit)
+        $itemErrors | ForEach-Object { Write-Error "Item $_ is too large! Maximum of $limit!" }
+        $hadError = $hadError -or [bool]$itemErrors
+
+        Write-Verbose "Found $($itemErrors.Length) files with size limit escalation."
+
+        $itemErrors = @($list | Where-Object -Property Name -NotMatch "^[a-zA-Z0-9_\-]{1,8}(\.[a-zA-Z0-9_\-]{0,3})?$")
+        $itemErrors | ForEach-Object { Write-Error "Item $_ has an invalid filename. Must meet 8.3 specs and only contain alphanumeric characters." }
+        $hadError = $hadError -or [bool]$itemErrors
+
+        Write-Verbose "Found $($itemErrors.Length) files with file name problems."
+
+        $itemErrors = @($list | Where-Object { $_ -isnot [System.IO.FileInfo]} )
+        $itemErrors | ForEach-Object { Write-Error "Item $_ is not a file!" }
+        $hadError = $hadError -or [bool]$itemErrors
+
+        Write-Verbose "Found $($itemErrors.Length) items which aren't a file!"
+
+        if ($hadError)
+        {
+            throw "Cannot continue with file errors!"
+        }
+
+        @{title = $Title; version = $Version; author = $Author; type = $Type.ToLower(); kerneltype = $KernelType; assets = @($list | Select-Object -ExpandProperty Name)} | ConvertTo-Json | Out-File -FilePath $mani
+
+        $list = @($list | Select-Object -ExpandProperty FullName)
+
+        $list += $mani
+
+        Write-Verbose "Attaching $($list.Length) files."
+
+        Compress-Archive -DestinationPath $OutputPath -Path $list -CompressionLevel Optimal -Force
+        
+    }
+    finally {
+        if ($tmp)
+        {
+            Remove-Item -Path $tmp -Recurse -Force
+        }
+    }
+}
+
 
 function Get-ServerAnnouncement {
     [CmdletBinding()]
@@ -558,4 +906,6 @@ function Approve-Account {
 
 Export-ModuleMember -Function Get-Host, Get-Account, Get-ServerAnnouncement, `
     Clear-ServerAnnouncement, Set-ServerAnnouncement, Connect-Host, Register-Host, `
-    Get-MailTemplate, Set-MailTemplate, Approve-Account
+    Get-MailTemplate, Set-MailTemplate, Approve-Account, Get-UpdateImages, `
+    Set-FirmwareImage, Set-ConfigImage, Clear-FirmwareImage, Clear-ConfigImage, `
+    Build-Asset, Build-FirmwareAsset, Build-ConfigAsset

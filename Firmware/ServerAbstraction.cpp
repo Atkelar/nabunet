@@ -27,6 +27,8 @@ RemoteServerHandler::RemoteServerHandler()
   validatedLoader = 0;
   validatedIsNabuNet = false;
   remote_buffer = (unsigned char*)malloc(4096);
+  RemoteServerConfigImageVersion = NULL;
+  RemoteServerFirmwareImageVersion = NULL;
 }
 
 LocalServerHandler::LocalServerHandler()
@@ -86,6 +88,12 @@ void RemoteServerHandler::disconnect()
   validatedKernel = 0;
   validatedLoader = 0;
   validatedIsNabuNet = false;
+  if (RemoteServerConfigImageVersion)
+    delete RemoteServerConfigImageVersion;
+  RemoteServerConfigImageVersion = NULL;
+  if (RemoteServerFirmwareImageVersion)
+    delete RemoteServerFirmwareImageVersion;
+  RemoteServerFirmwareImageVersion = NULL;
 }
 
 bool RemoteServerHandler::has_login()
@@ -115,6 +123,55 @@ bool RemoteServerHandler::virtual_server_is_nabunet(int code)
   }
   return false;
 }
+
+char* RemoteServerHandler::config_image_version()
+{
+  if (RemoteServerConfigImageVersion == NULL)
+    fetch_image_versions();
+  return RemoteServerConfigImageVersion;
+}
+char* RemoteServerHandler::firmware_image_version()
+{
+  if (RemoteServerFirmwareImageVersion == NULL)
+    fetch_image_versions();
+  return RemoteServerFirmwareImageVersion;
+}
+
+void  RemoteServerHandler::fetch_image_versions()
+{
+  if (!is_connected())
+    return;
+  if (RemoteServerConfigImageVersion != NULL || RemoteServerFirmwareImageVersion != NULL)
+    return;
+
+  int result = RemoteCall(6, 0, 7);
+  if (result >=1)
+  {
+    int ofs = 2;
+    int len = 0;
+    if (remote_buffer[1] | 1)
+    {
+      len = remote_buffer[ofs];
+      if (len > 32)
+        return;
+      RemoteServerConfigImageVersion = new char[len+1];
+      strncpy(RemoteServerConfigImageVersion, (const char*)remote_buffer + ofs, len);
+      RemoteServerConfigImageVersion[len]=0;
+      ofs+=len;
+    }
+    if (remote_buffer[2] | 2)
+    {
+      len = remote_buffer[ofs];
+      if (len > 32)
+        return;
+      RemoteServerFirmwareImageVersion = new char[len+1];
+      strncpy(RemoteServerFirmwareImageVersion, (const char*)remote_buffer + ofs, len);
+      RemoteServerFirmwareImageVersion[len]=0;
+      ofs+=len;
+    }
+  }
+}
+
 
 bool RemoteServerHandler::request_block_for_hcca(int channelNumber, unsigned char a1, unsigned char a2, unsigned char a3, int blockNumber, int blockLength, void * target)
 {

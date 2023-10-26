@@ -114,6 +114,8 @@ class RemoteServerHandler
     bool is_read_only() override { return true; }
     String server_name() override { return is_connected() ? (HasServerInfo ? RemoteServerName : LoadingServerInfoServerName) : NotConnectedServerName; }
     String server_version() override { return is_connected() ? RemoteServerVersion : NotConnectedServerVersion; }
+    char* config_image_version();
+    char* firmware_image_version();
     bool is_connected() override;
     int feature_flags() override;
 
@@ -123,11 +125,16 @@ class RemoteServerHandler
   private:
     WebSocketClient* Connection;
 
+    void fetch_image_versions();
+
     int RemoteServerApiLevel;
     char RemoteServerVersion[33];
     char RemoteServerName[33];
     bool HasServerInfo;
     int RemoteFlags;
+
+    char* RemoteServerConfigImageVersion;
+    char* RemoteServerFirmwareImageVersion;
 
     int validatedCode;
     int validatedKernel;

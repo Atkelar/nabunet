@@ -4,6 +4,8 @@ namespace NabuNet.ProgramModel
     {
         ResourceOnly,
         Kernel,
-        Program
+        Program,
+        Firmware,
+        Config,
     }
 }

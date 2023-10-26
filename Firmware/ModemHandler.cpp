@@ -289,7 +289,7 @@ void NabuNetModem::replace_setup_image_from_card()
 
 
 // Check if we have a firmware update on the SD card; false if not.
-bool NabuNetModem::check_setup_image_on_card()
+bool NabuNetModem::check_config_image_on_card()
 {
   if(!SDCardDetected)
     return false;
@@ -679,7 +679,7 @@ bool NabuNetModem::handle_state_loop()
         diag("\n");
         
         // indeed! Do we have a new setup image in the reader? 
-        if (check_setup_image_on_card())
+        if (check_config_image_on_card())
         {
           diag("RELOADIMAGE2\n");
           // yes, we got one... offer for installation... or force if ROM is empty...

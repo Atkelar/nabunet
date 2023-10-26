@@ -58,7 +58,7 @@ class NabuNetModem
   private:
     bool wait_signal_released();
     bool confirm_install_setup_image();
-    bool check_setup_image_on_card();
+    bool check_config_image_on_card();
     void replace_setup_image_from_card();
     bool handle_modem_running();
     bool check_and_initilize_local_server();

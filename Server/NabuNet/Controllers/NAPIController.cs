@@ -220,11 +220,13 @@ namespace NabuNet
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<int?>> DeployAsset([FromBody] string packetInput, [FromServices] IAssetManager assets)
         {
+            _Logger.LogInformation("Uploaded {chars} characters", packetInput.Length);
             byte[] packet = System.Convert.FromBase64String(packetInput);
             using (var zipFile = new System.IO.MemoryStream(packet, false))
             {
                 try
                 {
+                    _Logger.LogInformation("Uploaded {bytes} bytes", packet.Length);
                     var info = await assets.CreateAssetFromBlob(zipFile);
                     return info.Id;
                 }
@@ -341,5 +343,41 @@ namespace NabuNet
             }
             return NoContent();
         }
+
+        /// <summary>
+        /// Get the currently active images for updating the modem and its configuration program.
+        /// </summary>
+        [HttpGet("updates")]
+        [Authorize(SecurityPolicy.ContentManager)]
+        public async Task<ActionResult<ServerUpdateDetails>> GetUpdateDetails([FromServices] IVirtualServerManager vServers)
+        {
+            return await vServers.GetUpdateDetails();
+        }
+
+
+        [Authorize(SecurityPolicy.ContentManager)]
+        [HttpPut("updates/set")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<ServerUpdateDetails>> UpdateVirtualServerDetails(
+            [FromServices] IVirtualServerManager vServer,
+            [FromQuery] int? newConfigAsset = null,
+            [FromQuery] int? newFirmwareAsset = null
+            )
+        {
+            var details = await vServer.GetUpdateDetails();
+            if (newConfigAsset.HasValue && newConfigAsset.Value != details.ConfigImageAsset)
+            {
+                await vServer.SetConfigImageAsset(newConfigAsset.Value);
+            }
+
+            if (newFirmwareAsset.HasValue && newFirmwareAsset.Value != details.FirmwareImageAsset)
+            {
+                await vServer.SetFirmwareImageAsset(newFirmwareAsset.Value);
+            }
+
+            return await vServer.GetUpdateDetails();
+          
+        }       
     }
 }
