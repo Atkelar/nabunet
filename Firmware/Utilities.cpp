@@ -6,6 +6,7 @@
 #include "Arduino.h"
 #include "ModemHandler.h"
 #include <ESP8266WiFi.h>
+#include "BlinkyStat.h"
 
 
 unsigned char shared_buffer[BUFFER_SIZE];
@@ -101,17 +102,7 @@ void modem_panic(int code)
 // will blink the requested LED for "number" times; Can be used as a status indicator.
 void blink_status_confirmed(int ledPin, int number)
 {
-  // starting with "off" state to make sure we catch it between other status codes.
-  while (number > 0)
-  {
-    digitalWrite(ledPin, LED_OFF);
-    delay(BLINK_DELAY);
-    digitalWrite(ledPin, LED_ON);
-    delay(BLINK_DELAY);
-    number--;
-  }
-  digitalWrite(ledPin, LED_OFF);
-  delay(BLINK_DELAY * 2); // make sure a "longer" pause is between serialized error blinks
+  Blinky.Signal(ledPin, number);
 }
 
 

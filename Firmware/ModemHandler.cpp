@@ -9,6 +9,7 @@
 #include "ConfigFile.h"
 #include "ServerAbstraction.h"
 #include "NabuNetHandler.h"
+#include "BlinkyStat.h"
 
 NabuNetModem Modem;
 
@@ -154,7 +155,7 @@ bool NabuNetModem::check_and_initilize_wifi()
     diaghex(WiFi.status());
     diag("x\n");
     ModemState = STATE_CONNECTING_WIFI;
-    WiFiConnectTimeout = 50;
+    WiFiConnectTimeout = 80;
     return true;
   }
   return false;
@@ -301,7 +302,6 @@ bool NabuNetModem::check_setup_image_on_card()
   char nameBuffer[14];
   nameBuffer[13]=0;
 
-  
 
   File32 entry = sd.open(BootImageFileName);
   if (!entry)
@@ -487,6 +487,8 @@ void NabuNetModem::switch_mode_native()
 
 bool NabuNetModem::handle_state_loop()
 {
+  Blinky.TickNow();
+
   switch (ModemState)
   {
     case STATE_BOOT:
@@ -589,6 +591,7 @@ bool NabuNetModem::handle_state_loop()
           digitalWrite(PIN_LED_NET, LED_OFF);
           delay(250);
           digitalWrite(PIN_LED_NET, LED_ON);
+          delay(250);
           break;
         case WL_DISCONNECTED:
           WiFiConnectTimeout--;
@@ -606,6 +609,7 @@ bool NabuNetModem::handle_state_loop()
             digitalWrite(PIN_LED_NET, LED_OFF);
             delay(250);
             digitalWrite(PIN_LED_NET, LED_ON);
+            delay(250);
           }
           break;
         case WL_NO_SSID_AVAIL:
