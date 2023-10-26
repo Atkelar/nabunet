@@ -47,6 +47,13 @@ class NabuNetModem
 
     // returns the virtual server that was requested, or zero if the current server doesn't support any.
     int get_active_virtual_server();
+
+    bool has_firmware_image_on_card();
+    bool update_firmware_from_card();
+
+    bool start_firmware_download(int size);
+    bool push_firmware_packet(unsigned char *data, int size);
+    bool commit_firmware_download(int checksum);
     
   private:
     bool wait_signal_released();
@@ -61,6 +68,10 @@ class NabuNetModem
     int CurrentHCCAMode;
 
     int VirtualServerCode;
+
+    bool FirmwareDownloadActive;
+    int FirmwareExpectedSize;
+    int FirmwareCurrentChecksum;
 
     int ModemState;
     int PanicCode;

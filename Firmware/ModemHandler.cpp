@@ -11,6 +11,7 @@
 #include "NabuNetHandler.h"
 #include "BlinkyStat.h"
 
+
 NabuNetModem Modem;
 
 
@@ -70,6 +71,7 @@ void NabuNetModem::init()
   IsServicingMode = false;
 
   PossibleNabuNetSync = 0;
+  FirmwareDownloadActive = false;
 
   PanicCode = 0;
 
@@ -482,6 +484,167 @@ void NabuNetModem::switch_mode_native()
     CurrentHCCAMode = HCCA_MODE_NATIVE;
     NabuIO.set_active_handler(new HCCAHandler(!IsServicingMode && ForceChannelQuery, IsServicingMode ? 0 : ModemConfig.ActiveConfig.ChannelCode));  // force back to HCCA handler for booting...
   }
+}
+
+bool NabuNetModem::has_firmware_image_on_card()
+{
+  if(!SDCardDetected)
+    return false;
+
+  bool result = false;
+
+  diag("Scanning SD for firmware image");
+  diag(FirmwareImageFileName);
+
+  digitalWrite(PIN_LED_IO, LED_ON);
+
+  char nameBuffer[14];
+  nameBuffer[13]=0;
+
+  File32 entry = sd.open(FirmwareImageFileName);
+  if (!entry)
+  {
+    digitalWrite(PIN_LED_IO, LED_OFF);
+    return false;
+  }
+  if (entry.size() > 10 && entry.size() < FIRMWARESIZELIMIT)  // sanity check and size limit check...
+    result = true;
+  else
+    diag("\n\nFirmware image on SD is invlaid sized.!\n");
+
+  digitalWrite(PIN_LED_IO, LED_OFF);
+
+  if (result)
+    diag("\n\nFound firmware image on SD!\n");
+  
+  return result;
+}
+bool NabuNetModem::update_firmware_from_card()
+{
+  if(!SDCardDetected)
+    return false;
+
+  diag("Scanning SD for firmware image");
+  diag(FirmwareImageFileName);
+
+  digitalWrite(PIN_LED_IO, LED_ON);
+
+  char nameBuffer[14];
+  nameBuffer[13]=0;
+
+  File32 entry = sd.open(FirmwareImageFileName);
+  if (!entry)
+  {
+    digitalWrite(PIN_LED_IO, LED_OFF);
+    return false;
+  }
+  if (entry.size() > 10 && entry.size() < FIRMWARESIZELIMIT)  // sanity check and size limit check...
+  {
+    // start the update!
+    if (!Update.begin(entry.size(), U_FLASH))
+    {
+      Blinky.Queue(PIN_LED_ERR, ERROR_SIGNAL_UPDATEFAILED);
+      return false;
+    }
+
+    Update.writeStream(entry);
+
+    if (Update.end())
+    {
+      return true;
+    }
+    Blinky.Queue(PIN_LED_ERR, ERROR_SIGNAL_UPDATEFAILED);
+  }
+  return false;
+}
+
+bool NabuNetModem::start_firmware_download(int size)
+{
+  if (!SDCardDetected)
+    return false;
+  File32 entry;
+  digitalWrite(PIN_LED_IO, LED_ON);
+
+  if (sd.exists(FirmwareTempFileName))
+  {
+    diag("temp file exists, removing...");
+    entry = sd.open(FirmwareTempFileName);
+    if (entry)
+    {
+      entry.remove();
+    }
+  }
+  if (size > sd.freeClusterCount() * sd.bytesPerCluster() + 0xffff)
+  {
+    digitalWrite(PIN_LED_IO, LED_OFF);
+    return false;
+  }
+  entry = sd.open(FirmwareTempFileName, O_CREAT);
+  entry.close();
+  FirmwareCurrentChecksum = 0xffff; // start value...
+  FirmwareExpectedSize = size;
+  FirmwareDownloadActive = true;
+  digitalWrite(PIN_LED_IO, LED_OFF);
+  return true;
+}
+bool NabuNetModem::push_firmware_packet(unsigned char *data, int size)
+{
+  if (!SDCardDetected || !FirmwareDownloadActive)
+    return false;
+  digitalWrite(PIN_LED_IO, LED_ON);
+  if (sd.exists(FirmwareTempFileName))
+  {
+    File32 entry = sd.open(FirmwareTempFileName, O_APPEND);
+    if (entry.write(data, size) != size)
+      return false;
+    entry.close();
+    FirmwareCurrentChecksum = running_crc16(FirmwareCurrentChecksum, data, size);
+    digitalWrite(PIN_LED_IO, LED_OFF);
+    return true;
+  } 
+  digitalWrite(PIN_LED_IO, LED_OFF);
+  return false;
+}
+bool NabuNetModem::commit_firmware_download(int checksum)
+{
+  if (!SDCardDetected || !FirmwareDownloadActive)
+    return false;
+  digitalWrite(PIN_LED_IO, LED_ON);
+  if (sd.exists(FirmwareTempFileName))
+  {
+    File32 entry = sd.open(FirmwareTempFileName);
+    if (entry.size() != FirmwareExpectedSize || checksum != FirmwareCurrentChecksum)
+    {
+      entry.close();
+      entry.remove();
+      FirmwareDownloadActive = false;
+      digitalWrite(PIN_LED_IO, LED_OFF);
+      return false;
+    }
+
+    // if we got here, the download is done, checksum is valid and we can start the update!
+
+    if (!Update.begin(FirmwareExpectedSize, U_FLASH))
+    {
+      digitalWrite(PIN_LED_IO, LED_OFF);
+      Blinky.Queue(PIN_LED_ERR, ERROR_SIGNAL_UPDATEFAILED);
+      return false;
+    }
+    
+    Update.writeStream(entry);
+    if (!Update.end())
+    {
+      digitalWrite(PIN_LED_IO, LED_OFF);
+      Blinky.Queue(PIN_LED_ERR, ERROR_SIGNAL_UPDATEFAILED);
+      return false;
+    }
+
+    entry.close();
+    digitalWrite(PIN_LED_IO, LED_OFF);
+    return true;
+  } 
+  digitalWrite(PIN_LED_IO, LED_OFF);
+  return false;
 }
 
 

@@ -15,6 +15,10 @@
 // built in EEPROM with an external 64k one eventually...
 #define IMAGESIZELIMIT 24*1024
 
+// Maximum size for a configuration image. Should be slightly less than 32k, to open option to replace
+// built in EEPROM with an external 64k one eventually...
+#define FIRMWARESIZELIMIT 2*1024*1024
+
 
 // Fallback server URL for broken configs
 #define DEFAULT_SERVER_HOST "nabu.atkelar.com"

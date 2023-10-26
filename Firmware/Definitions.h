@@ -36,6 +36,7 @@
 #define ERROR_SIGNAL_NOSERVER 4     // No server available; Both WiFi and Local server are not available.
 #define ERROR_SIGNAL_FATAL_COM_ERROR 5  // the modem communication failed in an unexpected way.
 #define ERROR_SIGNAL_REMOTE_CONN_FAILED 6 // remote server didn't reply or replied out of bounds
+#define ERROR_SIGNAL_UPDATEFAILED 7 // Firmware update failed.
 
 // the maximum send/receive buffer sizes
 // tx buffer might need up to 512bytes + spare for 
@@ -45,6 +46,8 @@
 
 // The filename on the SD card that is used to push a new config image to the internal storage.
 const char BootImageFileName[] = "/nabuboot.img";
+const char FirmwareImageFileName[] = "/nabufirm.img";
+const char FirmwareTempFileName[] = "/nabu!ota.img";
 
 // The internal filenames for the SPIFFS files to hold the config boot image. Two names to 
 // alternate between 1 and 2, so a failed update will not brick the modem.

@@ -47,12 +47,8 @@ const unsigned char CRC_Table[] = {
             0x17, 0x6E, 0x36, 0x7E, 0x55, 0x4E, 0x74, 0x5E, 0x93, 0x2E, 0xB2, 0x3E, 0xD1, 0x0E, 0xF0, 0x1E
         };
 
-// compute (bad) CRC16 CCITT to match Nabu version. This is also used to sum up the boot images!
-int compute_crc16(unsigned char* target, int len)
+int running_crc16(int running, unsigned char* target, int len)
 {
-  // this code is a 1:1 reproduction of the assembler version to speed up
-  // the development process. It might be beneficial to optimize this...
-  int running = 0xffff;
   int index, now;
   for (int i = 0; i < len; i++)
   {
@@ -68,6 +64,14 @@ int compute_crc16(unsigned char* target, int len)
     running = (now << 8) | (running & 0xff);
   }
   return running;
+}
+
+// compute (bad) CRC16 CCITT to match Nabu version. This is also used to sum up the boot images!
+int compute_crc16(unsigned char* target, int len)
+{
+  // this code is a 1:1 reproduction of the assembler version to speed up
+  // the development process. It might be beneficial to optimize this...
+  return running_crc16(0xffff, target, len);
 }
 
 // appends the computed CRC value to the last two bytes in the buffer, so the validate call can check for "==0" later.

@@ -1,6 +1,7 @@
 
 #include "BlinkyStat.h"
 #include "Definitions.h"
+#include "Arduino.h"
 
 BlinkyStat Blinky(BLINK_DELAY);
 
@@ -12,7 +13,7 @@ BlinkyStat::BlinkyStat(int delay)
     blinkDelay = delay;
 }
 
-void BlinkyStat::Queue(int ledPin, int count, int repeat = 1)
+void BlinkyStat::Queue(int ledPin, int count, int repeat)
 {
     BlinkEntry* n = new BlinkEntry();
     n->ledPin = ledPin;

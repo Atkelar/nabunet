@@ -1,6 +1,9 @@
 #ifndef NABUUTILITIESH
 #define NABUUTILITIESH
 
+// compute (bad) CRC16 CCITT to match Nabu version.
+int running_crc16(int running, unsigned char* target, int len);
+
 // compute (bad) CRC16 CCITT to match Nabu version. This is also used to sum up the boot images!
 int compute_crc16(unsigned char* target, int len);
 
