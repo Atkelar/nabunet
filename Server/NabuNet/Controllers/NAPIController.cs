@@ -177,6 +177,7 @@ namespace NabuNet
             var result = new List<UserProfileDto>();
             foreach(var item in await users.GetUserNames())
             {
+                
                 if (fullDetails)
                 {
                     var details = await users.GetProfileByName(item);

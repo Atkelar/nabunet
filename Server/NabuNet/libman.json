@@ -3,7 +3,7 @@
   "defaultProvider": "cdnjs",
   "libraries": [
     {
-      "library": "jquery@3.7.0",
+      "library": "jquery@3.7.1",
       "destination": "wwwroot/js",
       "files": [
         "jquery.min.js"
@@ -17,7 +17,7 @@
       ]
     },
     {
-      "library": "jquery-validate@1.19.5",
+      "library": "jquery-validate@1.20.0",
       "files": [
         "jquery.validate.min.js"
       ],
