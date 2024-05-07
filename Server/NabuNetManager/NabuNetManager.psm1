@@ -266,24 +266,30 @@ function Call-Napi {
 
 # actual module functions start here...
 
+function Get-Account {
+    [CmdletBinding()]
+    [OutputType([NabuAccountInfo])]
+    param (
+        [Parameter()]
+        [switch] $Full
+    )
 <#
 .SYNOPSIS
     Gets the list of user accounts on the connected server. Requires admin or moderator permission. When the "Full" option is omitted, only the names are populated to speed up access.
 
 .PARAMETER Full
     When provided, all properties of the returned user items are filled.
+
+.OUTPUTS 
+    NabuAccountInfo
 #>
-function Get-Account {
-    [CmdletBinding()]
-    param (
-        [Parameter()]
-        [switch] $Full
-    )
+
     Call-Napi -Path "accounts" -Query @{ "full" = $Full.IsPresent } | ForEach-Object { New-Object NabuAccountInfo -ArgumentList $_ }
 }
 
 function Get-UpdateImages {
     [CmdletBinding()]
+    [OutputType([NabuUpdateImages])]
     param(
     )
     <#
@@ -333,6 +339,7 @@ NabuUpdateImages
 
 function Set-ConfigImage {
     [CmdletBinding(DefaultParameterSetName="path")]
+    [OutputType([NabuUpdateImages])]
     param(
         [Parameter(ParameterSetName="path")]
         [string]$Path,
@@ -364,6 +371,7 @@ NabuUpdateImages
 
 function Clear-FirmwareImage {
     [CmdletBinding()]
+    [OutputType([NabuUpdateImages])]
     param(
     )
     <#
@@ -383,6 +391,7 @@ NabuUpdateImages
 
 function Clear-ConfigImage {
     [CmdletBinding()]
+    [OutputType([NabuUpdateImages])]
     param(
     )
     <#
@@ -610,6 +619,7 @@ around that simplify well known asset creation with proper parameters!
 
 function Get-ServerAnnouncement {
     [CmdletBinding()]
+    [OutputType([NabuArticleBase])]
     param (
         [switch]$Raw
     )
@@ -680,6 +690,7 @@ on the details page, complete with absolute and relative server time info.
 If provided, the returned article info from the server will be the raw (markdown) text, if not a plain text rendering is provided.
 #>
     [CmdletBinding(PositionalBinding = $false, ConfirmImpact = "Medium", SupportsShouldProcess = $true)]
+    [OutputType([NabuArticleBase])]
     param (
         [Parameter(Position = 0, Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
         [string]$Title,
@@ -790,6 +801,7 @@ The path of the NAPI interface, defaults to the "/napi" folder.
 
 #>
     [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([NabuHostInfo])]
     param (
         [Parameter(Mandatory = $true, Position = 0, ParameterSetName = "Temporary")]
         [string]$Host,
@@ -855,6 +867,7 @@ If specified, the registered servers will be listed. If not, the currently conne
 NabuHostInfo
 #>
     [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([NabuHostInfo])]
     param (
         [switch]$List
     )
@@ -880,8 +893,12 @@ Asks the server for the subject/body of the e-mail template. Needs site admin pr
 .PARAMETER Id
 The ID (key) of the mail template.
 
+.OUTPUTS
+    NabuTemplateInfo
+
 #>
     [CmdletBinding()]
+    [OutputType([NabuTemplateInfo])]
     param (
         [Parameter(Mandatory = $true)]
         [ValidatePattern("^[a-zA-Z0-9-]+$", ErrorMessage = "Only digits and letters allowed!")]
