@@ -92,6 +92,35 @@ class NabuTemplateInfo {
     [string] $Body
 }
 
+# public visible server context info
+class NabuAccountInfo {
+    NabuAccountInfo($in) {
+        $this.Name = $in.Name
+        $this.IsComplete = [bool]$in.isComplete
+        $this.ContactEMail = $in.contactEMail
+        $this.DisplayName = $in.displayName
+        $this.HighscoreName = $in.highscoreName
+        $this.EnableApiAccess = [bool]$in.enableAPIAccess
+        $this.EnableDeviceConnections = [bool]$in.enableDeviceConnections
+        $this.IsAdministrator = [bool]$in.isAdministrator
+        $this.IsContentManager = [bool]$in.isContentManager
+        $this.IsEnabled = [bool]$in.isEnabled
+        $this.IsModerator = [bool]$in.isModerator
+    }
+    [string] $Name
+    [string] $ContactEMail
+    [string] $DisplayName
+    [string] $HighscoreName
+    [bool] $EnableApiAccess
+    [bool] $EnableDeviceConnections
+    [bool] $IsAdministrator
+    [bool] $IsContentManager
+    [bool] $IsEnabled
+    [bool] $IsModerator
+    [bool] $IsComplete
+}
+
+
 # helper functions next...
 
 function Save-RegisteredHost {
@@ -127,6 +156,10 @@ function Load-RegisteredHost {
         Import-Clixml -Path $path | ForEach-Object { New-Object NabuHost -ArgumentList $Name, $_ } # | Where-Object { $_ -is [NabuHost] }
         # $data = Import-PowerShellDataFile -Path $path
         # New-Object NabuHost -ArgumentList $data
+    }
+    else 
+    {
+        throw "Registered host $Name not found! (casing?)"
     }
 }
 
@@ -226,18 +259,27 @@ function Call-Napi {
         204 {}  # expected sometimes: no content.
         302 { throw "Access denied!" }  # 302 redirect to login page; should look into that and make the server return a better error, but it's OK for now.
         404 { Write-Error "Item not found" }
-        default { Write-Verbose $tmp;  throw "Unkown/unexpected status code returned from remote API: $code" }
+        default { Write-Verbose $($tmp ?? "no result"); throw "Unkown/unexpected status code returned from remote API: $code" }
     }
 
 } 
 
 # actual module functions start here...
 
+<#
+.SYNOPSIS
+    Gets the list of user accounts on the connected server. Requires admin or moderator permission. When the "Full" option is omitted, only the names are populated to speed up access.
+
+.PARAMETER Full
+    When provided, all properties of the returned user items are filled.
+#>
 function Get-Account {
     [CmdletBinding()]
     param (
+        [Parameter()]
+        [switch] $Full
     )
-    Call-Napi -Path "accounts"# | ForEach-Object { @{ UserName = $_ } }
+    Call-Napi -Path "accounts" -Query @{ "full" = $Full.IsPresent } | ForEach-Object { New-Object NabuAccountInfo -ArgumentList $_ }
 }
 
 function Get-UpdateImages {

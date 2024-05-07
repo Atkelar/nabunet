@@ -124,5 +124,71 @@
             </TableRowEntries>
         </TableControl>
     </View>
+
+    <View>
+        <Name>NabuAccountInfo</Name>
+        <ViewSelectedBy>
+            <TypeName>NabuAccountInfo</TypeName>
+        </ViewSelectedBy>
+        <TableControl>
+            <TableHeaders>
+                <TableColumnHeader>
+                    <Width>20</Width>
+                    <Label>Name</Label>
+                </TableColumnHeader>
+                <TableColumnHeader>
+                    <Label>C</Label>
+                    <Width>1</Width>
+                </TableColumnHeader>
+                <TableColumnHeader>
+                    <Label>E</Label>
+                    <Width>1</Width>
+                </TableColumnHeader>
+                <TableColumnHeader>
+                    <Label>A</Label>
+                    <Width>1</Width>
+                </TableColumnHeader>
+                <TableColumnHeader>
+                    <Label>DisplayName</Label>
+                    <Width>30</Width>
+                </TableColumnHeader>
+                <TableColumnHeader>
+                    <Label>ContactEMail</Label>
+                    <Width>30</Width>
+                </TableColumnHeader>
+            </TableHeaders>
+            <TableRowEntries>
+                <TableRowEntry>
+                    <TableColumnItems>
+                        <TableColumnItem>
+                            <PropertyName>Name</PropertyName>
+                        </TableColumnItem>
+                        <TableColumnItem>
+                            <ScriptBlock>
+                                if ($_.IsComplete) { "x" } else { "-" }
+                            </ScriptBlock>
+                        </TableColumnItem>
+                        <TableColumnItem>
+                            <ScriptBlock>
+                                if ($_.IsEnabled) { "x" } else { "-" }
+                            </ScriptBlock>
+                        </TableColumnItem>
+                        <TableColumnItem>
+                            <ScriptBlock>
+                                if ($_.IsAdministrator) { "x" } else { "-" }
+                            </ScriptBlock>
+                        </TableColumnItem>
+                        <TableColumnItem>
+                            <PropertyName>DisplayName</PropertyName>
+                        </TableColumnItem>
+                        <TableColumnItem>
+                            <PropertyName>ContactEMail</PropertyName>
+                        </TableColumnItem>
+                    </TableColumnItems>
+                </TableRowEntry>
+            </TableRowEntries>
+        </TableControl>
+    </View>
+
   </ViewDefinitions>
 </Configuration>

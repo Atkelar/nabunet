@@ -170,6 +170,7 @@ namespace NabuNet
             _Logger.LogInformation("Updating server status message: {title}", title);
             ServerMessage = new Models.BaseArticle()
             {
+                Created = DateTime.UtcNow,
                 Title = title,
                 Article = article,
                 ReferenceDate = referenceDate
@@ -191,6 +192,7 @@ namespace NabuNet
             _Logger.LogInformation("Updating server imprint: {title}, {content}", title, content);
             Imprint = new Models.BaseArticle()
             {
+                Created = DateTime.UtcNow,
                 Title = title,
                 Article = content
             };

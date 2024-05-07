@@ -11,6 +11,6 @@ namespace NabuNet
 
         Task<bool> Exists(int assetId);
 
-        Task<(byte[]? Result, int filesize)> GetBlockFromFile(int assetId, string filename, int offset, int blockSize);
+        Task<(byte[]? Result, int FileSize)> GetBlockFromFile(int assetId, string filename, int offset, int blockSize);
     }
 }

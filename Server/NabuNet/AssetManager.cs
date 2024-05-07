@@ -408,7 +408,7 @@ namespace NabuNet
             }
         }
 
-        public async Task<(byte[]? Result, int filesize)> GetBlockFromFile(int assetId, string filename, int offset, int blockSize)
+        public async Task<(byte[]? Result, int FileSize)> GetBlockFromFile(int assetId, string filename, int offset, int blockSize)
         {
             filename = Path.Combine(FolderNameForAsset(assetId), filename);
             if (!File.Exists(filename))

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using ICSharpCode.SharpZipLib.Zip;
@@ -166,14 +167,30 @@ namespace NabuNet
         /// Get the list of all user names...
         /// </summary>
         /// <param name="users">*internal*</param>
-        /// <returns>True if the approve has been successful.</returns>
+        /// <returns>The user names, or full details if requested.</returns>
         [HttpGet("accounts")]
         [Authorize(SecurityPolicy.UserAdmin)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
-        public async Task<ActionResult<IEnumerable<string>>> GetUserNames([FromServices] IUserManager users)
+        public async Task<ActionResult<IEnumerable<UserProfileDto>>> GetUserNames([FromServices] IUserManager users, [FromQuery(Name = "full")] bool fullDetails = false)
         {
-            return new ActionResult<IEnumerable<string>>(await users.GetUserNames());
+            var result = new List<UserProfileDto>();
+            foreach(var item in await users.GetUserNames())
+            {
+                if (fullDetails)
+                {
+                    var details = await users.GetProfileByName(item);
+                    if (details == null)
+                        result.Add(new UserProfileDto(item));
+                    else
+                        result.Add(new UserProfileDto(details));
+                }
+                else
+                {
+                    result.Add(new UserProfileDto(item));
+                }
+            }
+            return result.OrderBy(x=>x.Name).ToList();
         }
 
         /// <summary>

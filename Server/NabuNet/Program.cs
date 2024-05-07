@@ -177,7 +177,9 @@ namespace NabuNet
 
                 app.UseForwardedHeaders();
 
-                app.UseHttpsRedirection();
+                if (!app.Environment.IsDevelopment())
+                    app.UseHttpsRedirection();
+                    
                 app.UseWebSockets(new WebSocketOptions() { KeepAliveInterval = System.TimeSpan.FromMinutes(1) });
                 app.Map("/api", x => x.UseMiddleware<NabuModemMiddleware>());
 

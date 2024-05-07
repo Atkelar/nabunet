@@ -2,9 +2,11 @@ using System;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NabuNet.ModemPacktes;
+using NabuNet.ProgramModel;
 
 namespace NabuNet.ModemHandlers
 {
@@ -71,50 +73,16 @@ namespace NabuNet.ModemHandlers
                             switch (trimmed[0])
                             {
                                 case 2: // request validate channel code...
-                                    var request = BasePacket.Deserialize<ValidateChannelCodeRequest>(trimmed);
-                                    var servers = Services.GetRequiredService<IVirtualServerManager>();
-                                    var info = await servers.GetDetails(request.Code, false);
-                                    if (info == null)
-                                    {
-                                        Logger.LogInformation("Info: {code} is not enabled or doesn't exist.", request.Code);
-                                        await SendReply(new ValidateChannelCodeResponse() { IsValid = false }, token);
-                                    }
-                                    else
-                                    {
-                                        Logger.LogInformation("Info: {code} found: {name}", request.Code, info.Info.Name);
-                                        await SendReply(new ValidateChannelCodeResponse() { IsValid = true, IsNabuNet = info.IsNabuNet, KernelAsset = info.Kernel, LoaderAsset = info.Loader }, token);
-                                    }
+                                    await SendReply(await HandleRequestChannelCodeValidation(BasePacket.Deserialize<ValidateChannelCodeRequest>(trimmed),token), token);
                                     break;
-                                case 4:
-                                    var requestBoot = BasePacket.Deserialize<LoadBootBlockRequest>(trimmed);
-                                    LoadBootBlockResponse response = new LoadBootBlockResponse();
-                                    var info2 = await Services.GetRequiredService<IVirtualServerManager>().GetDetails(requestBoot.Channel, false);
-                                    if (info2 != null)
-                                    {
-                                        if (info2.Kernel != requestBoot.AssetId)
-                                            Logger.LogWarning("Requested boot asset {rq} is not the current kernel asset {cur}", requestBoot.AssetId, info2.Kernel);
-                                        var assets = Services.GetRequiredService<IAssetManager>();
-                                        var assetInfo = await assets.GetInfo(requestBoot.AssetId);
-                                        if (assetInfo != null && assetInfo.Type == ProgramModel.AssetType.Kernel)
-                                        {
-                                            int offset = requestBoot.Block * requestBoot.BlockSize;
-                                            var blockResult = await assets.GetBlockFromFile(requestBoot.AssetId, "code.bin", offset, requestBoot.BlockSize);
-                                            response.IsLastBlock = (offset + blockResult.Result.Length >= blockResult.filesize);
-                                            response.Data = blockResult.Result;
-                                        }
-                                    }
-                                    await SendReply(response, token);
+                                case 4: 
+                                    await SendReply(await HandleRequestBootBlock(BasePacket.Deserialize<LoadBootBlockRequest>(trimmed), token),token);
                                     break;
                                 case 6:
-                                    var request2 = BasePacket.Deserialize<UpdateImageRequest>(trimmed);
-                                    var servers2 = Services.GetRequiredService<IVirtualServerManager>();
-                                    var details = await servers2.GetUpdateDetails();
-
-                                    // remember the image asset IDs for eventual download so they match up to the versions.
-                                    ConfigImageAsset = details.ConfigImageAsset;
-                                    FirmwareImageAsset = details.FirmwareImageAsset;
-
-                                    await SendReply(new UpdateImageResponse(details.ConfigImageVersion, details.FirmwareImageVersion), token);
+                                    await SendReply(await HandleRequestUpdateImagesVersions(BasePacket.Deserialize<UpdateImageRequest>(trimmed), token),token);
+                                    break;
+                                case 8:
+                                    await SendReply(await HandleRequestDownloadUpdateImage(BasePacket.Deserialize<UpdateImageDownloadRequest>(trimmed), token),token);
                                     break;
                             }
                         }
@@ -149,6 +117,114 @@ namespace NabuNet.ModemHandlers
                 if (Socket.State == WebSocketState.Open)
                     await Socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Handler closed.", token);
             }
+        }
+
+        private async Task<BasePacket> HandleRequestDownloadUpdateImage(UpdateImageDownloadRequest request, CancellationToken token)
+        {
+            if (request.Asset == 0)
+            {
+                // new request... "cookie" not yet known...
+                if (!FirmwareImageAsset.HasValue && !ConfigImageAsset.HasValue)
+                {
+                    var servers = Services.GetRequiredService<IVirtualServerManager>();
+                    var details = await servers.GetUpdateDetails();
+                    FirmwareImageAsset = details.FirmwareImageAsset;
+                    ConfigImageAsset = details.ConfigImageAsset;
+                }
+                switch(request.Type)
+                {
+                    case 1:
+                        if (ConfigImageAsset.HasValue)
+                        {
+                            return await MakeUpdateBlockReply(AssetType.Config, ConfigImageAsset.Value, "nabuboot.img", 0, 512, 1, token);
+                        }
+                        break;
+                    case 2:
+                        if (FirmwareImageAsset.HasValue)
+                        {
+                            return await MakeUpdateBlockReply(AssetType.Firmware, FirmwareImageAsset.Value, "nabufirm.img", 0, 512, 2, token);
+                        }
+                        break;
+                }
+            }
+            else
+            {
+                switch(request.Type)
+                {
+                    case 1:
+                        return await MakeUpdateBlockReply(null, request.Asset, "nabuboot.img", request.Offset, 512, 1, token);
+                    case 2:
+                        return await MakeUpdateBlockReply(null, request.Asset, "nabufirm.img", request.Offset, 512, 2, token);
+                }
+            }
+            throw new InvalidOperationException($"Requested asset type {request.Type} isn't avaialble at this server!");
+        }
+
+        private async Task<BasePacket> HandleRequestUpdateImagesVersions(UpdateImageRequest request, CancellationToken token)
+        {
+            var servers = Services.GetRequiredService<IVirtualServerManager>();
+            var details = await servers.GetUpdateDetails();
+
+            // remember the image asset IDs for eventual download so they match up to the versions.
+            ConfigImageAsset = details.ConfigImageAsset;
+            FirmwareImageAsset = details.FirmwareImageAsset;
+
+            return new UpdateImageResponse(details.ConfigImageVersion, details.FirmwareImageVersion);
+        }
+
+        private async Task<BasePacket> HandleRequestBootBlock(LoadBootBlockRequest request, CancellationToken token)
+        {
+            LoadBootBlockResponse response = new LoadBootBlockResponse();
+            var info = await Services.GetRequiredService<IVirtualServerManager>().GetDetails(request.Channel, false);
+            if (info != null)
+            {
+                if (info.Kernel != request.AssetId)
+                    Logger.LogWarning("Requested boot asset {rq} is not the current kernel asset {cur}", request.AssetId, info.Kernel);
+                var assets = Services.GetRequiredService<IAssetManager>();
+                var assetInfo = await assets.GetInfo(request.AssetId);
+                if (assetInfo != null && assetInfo.Type == ProgramModel.AssetType.Kernel)
+                {
+                    int offset = request.Block * request.BlockSize;
+                    var blockResult = await assets.GetBlockFromFile(request.AssetId, "code.bin", offset, request.BlockSize);
+                    if (blockResult.Result == null)
+                        throw new InvalidOperationException("Block read outside bounds!");
+                    response.IsLastBlock = offset + blockResult.Result.Length >= blockResult.FileSize;
+                    response.Data = blockResult.Result;
+                }
+            }
+            return response;
+        }
+
+        private async Task<BasePacket> HandleRequestChannelCodeValidation(ValidateChannelCodeRequest request, CancellationToken token)
+        {
+            var servers = Services.GetRequiredService<IVirtualServerManager>();
+            var info = await servers.GetDetails(request.Code, false);
+            if (info == null)
+            {
+                Logger.LogInformation("Info: {code} is not enabled or doesn't exist.", request.Code);
+                return new ValidateChannelCodeResponse() { IsValid = false };
+            }
+            else
+            {
+                Logger.LogInformation("Info: {code} found: {name}", request.Code, info.Info.Name);
+                return new ValidateChannelCodeResponse() { IsValid = true, IsNabuNet = info.IsNabuNet, KernelAsset = info.Kernel, LoaderAsset = info.Loader };
+            }
+        }
+
+        private async Task<BasePacket> MakeUpdateBlockReply(AssetType? expectedType, int assetId, string filename, int offset, int blockSize, byte type, CancellationToken token)
+        {
+            var assets = Services.GetRequiredService<IAssetManager>();
+            if (expectedType.HasValue)
+            {
+                var info = await assets.GetInfo(assetId);
+                if (info.Type != expectedType)
+                    throw new InvalidOperationException("Asset isn't the correct type of image!");
+            }
+            //Task<(byte[]? Result, int filesize)> GetBlockFromFile(int assetId, string filename, int offset, int blockSize);
+            var result = await assets.GetBlockFromFile(assetId, filename, offset, blockSize);
+            if (result.Result == null)
+                throw new InvalidOperationException("Asset read out of bounds!");
+            return new UpdateImageDownloadResponse(type, assetId, result.FileSize, result.Result);
         }
 
         private async Task<ModemConnectResponse> MakeServerReply()
