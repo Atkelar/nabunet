@@ -31,7 +31,7 @@ namespace NabuNet
 
         public async Task InvokeAsync(HttpContext context)
         {
-            string realFile;
+            string? realFile;
             if (_mappings.TryGetValue(context.Request.Path, out realFile))
             {
                 await context.Response.SendFileAsync(realFile);
