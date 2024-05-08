@@ -1,6 +1,6 @@
 /*
  * 
- * NABU Modem Firmware - Version 1.0 - Copyright 2023 by Atkelar - All Rights Reserved; 
+ * NABU Modem Firmware - Version 1.0 - Copyright 2023-2024 by Atkelar - All Rights Reserved; 
  * for License info, see the project repo, this firmware is covered by the same as the project. 
  * [TODO: update license info]
  * 

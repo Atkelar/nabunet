@@ -61,6 +61,7 @@ namespace NabuNet
                 }
             );
 
+            System.Console.WriteLine(typeof(Controllers.HomeController).Assembly.GetName().Version);
 
             builder.Services.AddDataProtection()
                 .SetApplicationName("NABUNET")
