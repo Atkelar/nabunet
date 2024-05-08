@@ -120,6 +120,31 @@ class NabuAccountInfo {
     [bool] $IsComplete
 }
 
+class NabuAccountSecurity
+{
+    NabuAccountSecurity($in, $name) {
+        $this.Name = $name
+        $this.Enable2FA = [bool]$in.enable2FA
+        $this.Finished2FASetup =  [bool]$in.finished2FASetup
+        $this.ForcePasswordChange = [bool]$in.forcePasswordChange
+        $this.LastValid2FAConfirm = $in.lastValid2FAConfirm ? [DateTime]$in.lastValid2FAConfirm : $null
+        $this.LastValidPasswordLogin = $in.lastValidPasswordLogin ? [DateTime]$in.lastValidPasswordLogin : $null
+        $this.MailValidationExpiration = $in.mailValidationExpiration ? [DateTime]$in.mailValidationExpiration : $null
+        $this.ProposedMailAddress = $in.ProposedMailAddress
+        $this.Started2FASetup = $in.started2FASetup ? [DateTime]$in.started2FASetup : $null
+    }
+    [string] $Name
+    [bool] $Enable2FA
+    [System.Nullable[DateTime]] $Started2FASetup
+    [bool] $Finished2FASetup
+
+    [bool]$ForcePasswordChange
+    [System.Nullable[DateTime]] $LastValid2FAConfirm
+    [System.Nullable[DateTime]] $LastValidPasswordLogin
+    [System.Nullable[DateTime]] $MailValidationExpiration
+    [string] $ProposedMailAddress
+}
+
 
 # helper functions next...
 
@@ -188,7 +213,9 @@ function Call-Napi {
         [Parameter()]
         [Object]$Body = $null,
         [Parameter()]
-        [hashtable]$Query = $null
+        [hashtable]$Query = $null,
+        [Parameter()]
+        [hashtable]$Uri = $null
     )
     $Token = $null
     if (!$Connection) {
@@ -224,15 +251,22 @@ function Call-Napi {
     if (!$Connection) {
         throw "Session is not connected! Use Connect-NabuNetHost first!"
     }
-    $Uri = "$($Connection.RemoteBaseUri)/$Version/$Path"
+    if ($Uri)
+    {
+        foreach($uname in $Uri.Keys)
+        {
+            $Path = $Path -replace "{$uname}", [Uri]::EscapeUriString($Uri[$uname])
+        }
+    }
+    $RawUri = "$($Connection.RemoteBaseUri)/$Version/$Path"
     if ($Query) {
         $sep = "?"
         foreach ($qname in $Query.Keys) {
-            $Uri += "$sep$qname=$([Uri]::EscapeDataString($Query[$qname]))"
+            $RawUri += "$sep$qname=$([Uri]::EscapeDataString($Query[$qname]))"
             $sep = "&"
         }
     }
-    Write-Verbose "Call: URI=$Uri"
+    Write-Verbose "Call: URI=$RawUri"
     $hdr = @{}
     if ($Token) {
         $hdr["Authorization"] = "Bearer $Token"
@@ -249,22 +283,47 @@ function Call-Napi {
         {
             Write-Verbose " Body for request: $($Body.SubString(0,40))...$($Body.SubString($Body.Length-40))"
         }
-        $tmp = Invoke-RestMethod -Method $Method -Uri $Uri -UserAgent "NabuNetPS/1" -Headers $hdr -Body $Body -ContentType "application/json" -StatusCodeVariable code -SkipHttpErrorCheck
+        $tmp = Invoke-RestMethod -Method $Method -Uri $RawUri -UserAgent "NabuNetPS/1" -Headers $hdr -Body $Body -ContentType "application/json" -StatusCodeVariable code -SkipHttpErrorCheck
     }
     else {
-        $tmp = Invoke-RestMethod -Method $Method -Uri $Uri -UserAgent "NabuNetPS/1" -Headers $hdr -StatusCodeVariable code -SkipHttpErrorCheck
+        $tmp = Invoke-RestMethod -Method $Method -Uri $RawUri -UserAgent "NabuNetPS/1" -Headers $hdr -StatusCodeVariable code -SkipHttpErrorCheck
     }
     switch ($code) {
         200 { $tmp }    # normal result.
         204 {}  # expected sometimes: no content.
         302 { throw "Access denied!" }  # 302 redirect to login page; should look into that and make the server return a better error, but it's OK for now.
         404 { Write-Error "Item not found" }
-        default { Write-Verbose $($tmp ?? "no result"); throw "Unkown/unexpected status code returned from remote API: $code" }
+        default { Write-Verbose $($tmp ?? "no acresult"); throw "Unkown/unexpected status code returned from remote API: $code" }
     }
 
 } 
 
 # actual module functions start here...
+
+function Get-AccountSecurity {
+    [CmdletBinding()]
+    [OutputType([NabuAccountSecurity])]
+    param (
+        [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
+        [string] $Name
+    )
+<#
+.SYNOPSIS
+    Gets the current security (login) related info for a given account.
+
+.PARAMETER Name
+    The user (login) name to query.
+
+.OUTPUTS 
+    NabuAccountSecurity
+#>
+
+    process
+    {
+        Call-Napi -Path "account/{username}/security" -Uri @{ "username" = $Name } | ForEach-Object { New-Object NabuAccountSecurity -ArgumentList $_, $Name }
+    }
+}
+
 
 function Get-Account {
     [CmdletBinding()]
@@ -284,7 +343,7 @@ function Get-Account {
     NabuAccountInfo
 #>
 
-    Call-Napi -Path "accounts" -Query @{ "full" = $Full.IsPresent } | ForEach-Object { New-Object NabuAccountInfo -ArgumentList $_ }
+    Call-Napi -Path "account" -Query @{ "full" = $Full.IsPresent } | ForEach-Object { New-Object NabuAccountInfo -ArgumentList $_ }
 }
 
 function Get-UpdateImages {
@@ -905,7 +964,7 @@ The ID (key) of the mail template.
         [string]$Id
     )
 
-    Call-Napi -Path "template/$id" | ForEach-Object { New-Object NabuTemplateInfo -ArgumentList $_, $id }
+    Call-Napi -Path "template/{id}" -Uri @{ "id" = $id } | ForEach-Object { New-Object NabuTemplateInfo -ArgumentList $_, $id }
    
 }
 
@@ -940,7 +999,7 @@ The body of the e-mail. Can include handlebars.net placeholders and should be HT
     )
     process {
         if ($PSCmdlet.ShouldProcess("$Id", "Updating mail template, new subject=$Subject, body=$($body.Length) characters.")) {
-            Call-Napi -Path "template/$id" -Method "POST" -Body @{ Subject = $Subject; Body = $Body }
+            Call-Napi -Path "template/{id}" -Uri @{"id" = $Id} -Method "POST" -Body @{ Subject = $Subject; Body = $Body }
         }
     }
   
@@ -951,20 +1010,66 @@ The body of the e-mail. Can include handlebars.net placeholders and should be HT
 function Approve-Account {
     [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "Medium")]
     param (
-        [Parameter()]
+        [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
         [ValidateLength(1, 32)]
         [ValidatePattern("^[a-zA-Z0-9-]+$", ErrorMessage = "Only digits and letters allowed!")]
         [string]
         $Name
     )
-    if ( $PSCmdlet.ShouldProcess($Name, "Confirm user account")) {
-        Call-Napi -Path "approveaccount/$Name" -Method "PUT"
+<#
+.SYNOPSIS
+    Approves an account that was held back because of manual approval requiremenst.
+
+.PARAMETER Name
+    The user login name to approve.
+
+.DESCRIPTION
+    If the server requires manual approval of new accounts, the "validate mail address" e-mail is not sent before this step is completed!
+#>
+    process
+    {
+        if ( $PSCmdlet.ShouldProcess($Name, "Confirm user account")) {
+            Call-Napi -Path "account/{username}/approve" -Uri @{"username" = $Name} -Method "PUT"
+        }
     }
 }
 
+# diag/testmail
+function Test-Mailing {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "Low")]
+    param (
+        [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
+        [ValidateLength(1, 128)]
+        [string]
+        $Receiver,
+        [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true)]
+        [string]
+        $Subject,
+        [Parameter(ValueFromPipelineByPropertyName=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $Info = "No further information provided."
+    )
+<#
+.SYNOPSIS
+    Sends a test message to a provided e-mail address and (as BCC) to the calling user's contact address.
 
-Export-ModuleMember -Function Get-Host, Get-Account, Get-ServerAnnouncement, `
-    Clear-ServerAnnouncement, Set-ServerAnnouncement, Connect-Host, Register-Host, `
-    Get-MailTemplate, Set-MailTemplate, Approve-Account, Get-UpdateImages, `
-    Set-FirmwareImage, Set-ConfigImage, Clear-FirmwareImage, Clear-ConfigImage, `
-    Build-Asset, Build-FirmwareAsset, Build-ConfigAsset
+.PARAMETER Receiver
+    The e-mail address to send the test message to.
+
+.PARAMETER Subject
+    A few words to add to the subject line for reference.
+
+.PARAMETER Info
+    A text (can be longer) that will be embedded as "pre" formatted text in the mail body.
+
+.DESCRIPTION
+    The server will use a standard diagnostic message template to adorn the provided values; this helps preventing abuse of this diag feature, besides only being allowed to site admins.
+#>
+    process
+    {
+        if ($PSCmdlet.ShouldProcess($Receiver, "Send test mail message")) {
+            Call-Napi -Path "diag/testmail" -Query @{"targetMail" = $Receiver; "subject" = $Subject } -Body $Info -Method "PUT"
+        }
+    }
+}

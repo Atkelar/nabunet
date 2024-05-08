@@ -13,6 +13,8 @@ namespace NabuNet
         Task<UserProfile?> CreateUserFromSignup(string username, string eMail, bool enable2FA, string password);
         Task<Setup2FAParameters?> GetNew2FAChallenge(string username);
 
+        Task<UserSecurityInfo?> GetUserSecurityInfo(string username);
+
         Task<bool> SendMailValidationMessage(string username, string newEMail);
         Task<bool> Exists(string username);
         Task<string?> ExtractUserFromTokenForMailValidationAndCheck(string token, string code);

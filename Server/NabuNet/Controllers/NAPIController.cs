@@ -128,51 +128,69 @@ namespace NabuNet
         /// MUST be confirmed by the receiver within the mail token timeout!
         /// </summary>
         /// <param name="newMailAddress">The new e-mail address to use.</param>
-        /// <param name="userName">The name of th euser to modify.</param>
+        /// <param name="username">The name of th euser to modify.</param>
         /// <returns>The result will be true if the change was initiated successuflly.</returns>
-        [HttpPut("resetusermail/{userName}")]
+        [HttpPut("account/{username}/resetmail")]
         [Authorize(SecurityPolicy.UserAdmin)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<bool>> ResetUserMail([FromBody] string newMailAddress, [FromRoute] string userName, [FromServices] IUserManager users)
+        public async Task<ActionResult<bool>> ResetUserMail([FromBody] string newMailAddress, [FromRoute] string username, [FromServices] IUserManager users)
         {
-            if (!await users.Exists(userName))
+            if (!await users.Exists(username))
                 return NotFound();
 
-            return await users.SendMailValidationMessage(userName, newMailAddress);
+            return await users.SendMailValidationMessage(username, newMailAddress);
         }
 
         /// <summary>
         /// Approve a pending user account. If the a-mail validation is still pending, this will also send out the appropriate link.
         /// </summary>
-        /// <param name="userName">The name of the account.</param>
+        /// <param name="username">The name of the account.</param>
         /// <param name="users">*internal*</param>
         /// <returns>True if the approve has been successful.</returns>
-        [HttpPut("approveaccount/{userName}")]
+        [HttpPut("account/{username}/approve")]
         [Authorize(SecurityPolicy.UserAdmin)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<bool>> ApproveAccount([FromRoute] string userName, [FromServices] IUserManager users)
+        public async Task<ActionResult<bool>> ApproveAccount([FromRoute] string username, [FromServices] IUserManager users)
         {
-            if (!await users.Exists(userName))
+            if (!await users.Exists(username))
                 return NotFound();
 
-            return await users.ApproveUser(userName);
+            return await users.ApproveUser(username);
         }
 
+
+        /// <summary>
+        /// Gets the security info associated with an account.
+        /// </summary>
+        /// <param name="users">*internal*</param>
+        /// <param name="username">The login name to query.</param>
+        /// <returns>The loaded security info or "not found".</returns>
+        [HttpGet("account/{username}/security")]
+        [Authorize(SecurityPolicy.UserAdmin)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<UserSecurityInfo>> GetUserSecurity([FromServices] IUserManager users, [FromRoute] string username)
+        {
+            var info = await users.GetUserSecurityInfo(username);
+            if (info == null)
+                return NotFound();
+            return info;
+        }
 
         /// <summary>
         /// Get the list of all user names...
         /// </summary>
         /// <param name="users">*internal*</param>
         /// <returns>The user names, or full details if requested.</returns>
-        [HttpGet("accounts")]
+        [HttpGet("account")]
         [Authorize(SecurityPolicy.UserAdmin)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
-        public async Task<ActionResult<IEnumerable<UserProfileDto>>> GetUserNames([FromServices] IUserManager users, [FromQuery(Name = "full")] bool fullDetails = false)
+        public async Task<ActionResult<IEnumerable<UserProfileDto>>> GetUsers([FromServices] IUserManager users, [FromQuery(Name = "full")] bool fullDetails = false)
         {
             var result = new List<UserProfileDto>();
             foreach(var item in await users.GetUserNames())
@@ -395,7 +413,39 @@ namespace NabuNet
             }
 
             return await vServer.GetUpdateDetails();
-          
-        }       
+        } 
+
+        [Authorize(SecurityPolicy.SiteAdmin)]
+        [HttpPut("diag/testmail")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<string>> SendTestMailMessage([FromQuery] string targetMail, [FromQuery]string subject, [FromBody]string info, [FromServices] IMailSender sender, [FromServices] IUserManager users)
+        {
+            string code = Guid.NewGuid().ToString("n");
+            bool ok;
+            try
+            {
+                var mymail = (await users.GetProfileByName(User.Identity.Name)).ContactEMail;
+                ok = await sender.TrySendMail(
+                    new MailingParameters() 
+                    { 
+                        MailTemplateKey = "diagtest", 
+                        Recipients = new string [] { targetMail }, 
+                        BCCRecipients = new string[] { mymail },
+                        Values = new Dictionary<string, string> {
+                            {"subject", subject},
+                            {"info", info},
+                            {"code", code}
+                        }
+                    });
+            }
+            catch (Exception ex)
+            {
+                return $"{targetMail}: Unhandled exception, reference code was {code}: {ex.ToString()}";
+            }
+            return ok ? $"{targetMail}: Successfully delegated code {code}." : $"{targetMail}: Failed to delegate - see server log for details, code was {code}!";
+        }
+
+ //       IAdminReportManager      
     }
 }

@@ -36,6 +36,8 @@ namespace NabuNet
                 if (content == null)
                     return false;
 
+                _Logger.LogTrace("Preparing Mail message by template {tpl}", input.MailTemplateKey);
+
                 var cfg = await _Config.GetOrLoad();
 
                 input.Values.Add("url", cfg.BaseUrl);
@@ -43,11 +45,22 @@ namespace NabuNet
                 input.Values.Add("servertagline", cfg.ServerTagLine);
                 input.Values.Add("now", cfg.GetFormattedServerTime(true));
 
+                if (_Logger.IsEnabled(LogLevel.Trace))
+                {
+                    foreach(var k in input.Values)
+                    {
+                        _Logger.LogTrace("  {key}: {value}", k.Key, k.Value);
+                    }
+                }
+
                 var subject = HandlebarsDotNet.Handlebars.Compile(content.Subject);
                 var body = HandlebarsDotNet.Handlebars.Compile(content.Body);
 
                 string txtSubject = subject(input.Values);
                 string txtBody = body(input.Values);
+
+                _Logger.LogTrace("Subject: {subject}", txtSubject);
+                _Logger.LogTrace("Body:\n{body}", txtBody);
 
                 MimeKit.MimeMessage msg = new MimeKit.MimeMessage();
                 if (input.Recipients != null)
@@ -63,8 +76,20 @@ namespace NabuNet
                 msg.Subject = txtSubject;
                 msg.Body = new MimeKit.TextPart("html") { Text = txtBody };
 
-                msg.From.Add(new MimeKit.MailboxAddress(_Mail.SenderName, _Mail.SenderAddress));
-                msg.Sender = new MimeKit.MailboxAddress(_Mail.SenderName, _Mail.SenderAddress);
+                var from = new MimeKit.MailboxAddress(_Mail.SenderName, _Mail.SenderAddress);
+                msg.From.Add(from);
+                msg.Sender = from;
+
+                if (_Logger.IsEnabled(LogLevel.Trace))
+                {
+                    _Logger.LogTrace("From: {from}", from);
+                    foreach(var x in msg.To)
+                        _Logger.LogTrace("  To: {to}", x);
+                    foreach(var x in msg.Cc)
+                        _Logger.LogTrace("  CC: {cc}", x);
+                    foreach(var x in msg.Bcc)
+                        _Logger.LogTrace("  BCC: {bcc}", x);
+                }
 
                 _Logger.LogInformation("Mail server {server}:{port}...", _Mail.Server, _Mail.Port);
 
@@ -88,7 +113,5 @@ namespace NabuNet
                 return false;
             }
         }
-
     }
-
 }

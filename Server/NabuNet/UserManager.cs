@@ -593,5 +593,14 @@ namespace NabuNet
             var identity = new ClaimsIdentity(claims, "nabunet");
             return new ClaimsPrincipal(identity);
         }
+
+        public async Task<UserSecurityInfo?> GetUserSecurityInfo(string username)
+        {
+            var cred = await _Database.GetDocumentAsync<UserCredentials>(CredentialsDocumentName, username);
+            if (cred == null)
+                return null;
+
+            return new UserSecurityInfo(cred);
+       }
     }
 }

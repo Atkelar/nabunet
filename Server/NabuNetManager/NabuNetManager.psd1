@@ -12,7 +12,7 @@
     RootModule           = 'NabuNetManager.psm1'
 
     # Version number of this module.
-    ModuleVersion        = '0.0.10'
+    ModuleVersion        = '0.0.11'
 
     # Supported PSEditions
     CompatiblePSEditions = @("core")
@@ -27,7 +27,7 @@
     CompanyName          = 'Atkelar'
 
     # Copyright statement for this module
-    Copyright            = '(c) 2023 by Atkelar. All rights reserved.'
+    Copyright            = '(c) 2023-2024 by Atkelar. All rights reserved.'
 
     # Description of the functionality provided by this module
     Description          = 'This is a powershell script module to wrap access to the REST endpoints of the NabuNet retro computing service; Curently a pure beta and "try something new" release. See the project website on GitHub for details and updates!'
@@ -72,7 +72,7 @@
     FunctionsToExport    = @("Register-Host", "Get-Host", "Connect-Host", 
         "Get-Account", "Get-ServerAnnouncement", "Set-ServerAnnouncement", "Clear-ServerAnnouncement",
         "Get-MailTemplate", "Set-MailTemplate", "Approve-Account", "Get-UpdateImages", "Clear-FirmwareImage", "Clear-ConfigImage", "Set-FirmwareImage", "Set-ConfigImage", 
-        "Build-Asset", "Build-FirmwareAsset", "Build-ConfigAsset")
+        "Build-Asset", "Build-FirmwareAsset", "Build-ConfigAsset", "Get-AccountSecurity", "Test-Mailing")
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
     CmdletsToExport      = @()
