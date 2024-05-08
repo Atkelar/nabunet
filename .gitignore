@@ -1,4 +1,4 @@
 **/output/
 **/tmp/
-local/
-**/.vscode/
+local/**/*
+.vscode/**/*
