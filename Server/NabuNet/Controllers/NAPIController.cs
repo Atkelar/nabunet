@@ -421,6 +421,7 @@ namespace NabuNet
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<string>> SendTestMailMessage([FromQuery] string targetMail, [FromQuery]string subject, [FromBody]string info, [FromServices] IMailSender sender, [FromServices] IUserManager users)
         {
+            _Logger.LogTrace("Called by: {useragent}", Request?.Headers?.UserAgent);
             string code = Guid.NewGuid().ToString("n");
             bool ok;
             try

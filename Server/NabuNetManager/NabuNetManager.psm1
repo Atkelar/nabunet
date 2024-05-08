@@ -217,6 +217,10 @@ function Call-Napi {
         [Parameter()]
         [hashtable]$Uri = $null
     )
+    if (-not $script:UserAgent)
+    {
+        $script:UserAgent = "NabuNetPS/1 ($($MyInvocation.MyCommand.Module.Version), PS $($PSVersionTable["PSVersion"]) $($PSVersionTable["PSEdition"]) $($PSVersionTable["OS"]))"
+    }
     $Token = $null
     if (!$Connection) {
         $Connection = $script:CurrentContext.Host
@@ -283,10 +287,10 @@ function Call-Napi {
         {
             Write-Verbose " Body for request: $($Body.SubString(0,40))...$($Body.SubString($Body.Length-40))"
         }
-        $tmp = Invoke-RestMethod -Method $Method -Uri $RawUri -UserAgent "NabuNetPS/1" -Headers $hdr -Body $Body -ContentType "application/json" -StatusCodeVariable code -SkipHttpErrorCheck
+        $tmp = Invoke-RestMethod -Method $Method -Uri $RawUri -UserAgent $script:UserAgent -Headers $hdr -Body $Body -ContentType "application/json" -StatusCodeVariable code -SkipHttpErrorCheck
     }
     else {
-        $tmp = Invoke-RestMethod -Method $Method -Uri $RawUri -UserAgent "NabuNetPS/1" -Headers $hdr -StatusCodeVariable code -SkipHttpErrorCheck
+        $tmp = Invoke-RestMethod -Method $Method -Uri $RawUri -UserAgent $script:UserAgent -Headers $hdr -StatusCodeVariable code -SkipHttpErrorCheck
     }
     switch ($code) {
         200 { $tmp }    # normal result.
